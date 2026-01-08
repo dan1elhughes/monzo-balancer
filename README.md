@@ -2,6 +2,8 @@
 
 A Cloudflare Worker that automatically maintains a target balance in your Monzo account by moving excess funds to a designated Pot, or withdrawing from it to cover deficits.
 
+**The goal is to keep the majority of your funds in a high-interest savings pot (which earns interest) while maintaining just enough in your main account to cover daily spending without going overdrawn.**
+
 ## ⚠️ Disclaimer
 
 **This project was completely vibe coded.** Use at your own risk.
