@@ -1,0 +1,9 @@
+name = "monzo-balancer"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# KV Namespace binding
+[[kv_namespaces]]
+binding = "MONZO_CONFIG"
+id = "6ce717a7d95e44638bc8af2c4925beb9"
