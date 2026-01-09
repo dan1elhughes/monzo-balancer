@@ -1,5 +1,6 @@
 import { MonzoAPI, castId } from '@otters/monzo';
 import { Env, MonzoConfig } from './types';
+import { logger } from './logger';
 
 export async function getMonzoConfig(env: Env): Promise<MonzoConfig | null> {
   const accessToken = await env.MONZO_CONFIG.get('MONZO_ACCESS_TOKEN');
@@ -60,11 +61,11 @@ export async function withMonzoClient<T>(
     // The library uses alistair/http, we'd need to inspect the error object.
     // For now, we'll try to refresh on any error that looks like it might be auth related
     // or just try refresh once on failure.
-    console.log('Monzo API call failed, attempting refresh...', error);
+    logger.warn('Monzo API call failed, attempting refresh', error);
 
     try {
       const newCreds = await client.refresh();
-      console.log('Token refreshed successfully');
+      logger.info('Token refreshed successfully');
       
       await saveTokens(env, newCreds.access_token, newCreds.refresh_token);
       
@@ -74,7 +75,7 @@ export async function withMonzoClient<T>(
       
       return await action(refreshedClient, newConfig);
     } catch (refreshError) {
-      console.error('Failed to refresh token', refreshError);
+      logger.error('Failed to refresh token', refreshError);
       throw refreshError; // Original error or refresh error
     }
   }

@@ -1,5 +1,6 @@
 import { MonzoAPI } from '@otters/monzo';
 import { MonzoConfig } from './types';
+import { logger } from './logger';
 
 export async function balanceAccount(client: MonzoAPI, config: MonzoConfig) {
   const { account_id, pot_id, target_balance } = config;
@@ -8,12 +9,12 @@ export async function balanceAccount(client: MonzoAPI, config: MonzoConfig) {
   const balanceData = await client.getBalance(account_id);
   const currentBalance = balanceData.balance;
 
-  console.log(`Current Balance: ${currentBalance}, Target: ${target_balance}`);
+  logger.info('Checking balance', { currentBalance, targetBalance: target_balance });
 
   const diff = currentBalance - target_balance;
 
   if (diff === 0) {
-    console.log('Balance is exactly on target.');
+    logger.info('Balance is exactly on target');
     return;
   }
 
@@ -21,7 +22,7 @@ export async function balanceAccount(client: MonzoAPI, config: MonzoConfig) {
 
   if (diff > 0) {
     // Excess funds: Deposit to Pot
-    console.log(`Depositing ${diff} into pot ${pot_id}`);
+    logger.info('Depositing excess funds', { amount: diff, potId: pot_id });
     await client.depositIntoPot(pot_id, {
       amount: diff,
       dedupe_id: dedupeId,
@@ -39,10 +40,10 @@ export async function balanceAccount(client: MonzoAPI, config: MonzoConfig) {
     const withdrawAmount = Math.abs(diff);
     const available = targetPot.balance;
 
-    console.log(`Pot Balance: ${available}, Need to withdraw: ${withdrawAmount}`);
+    logger.info('Checking pot balance for withdrawal', { potBalance: available, needed: withdrawAmount });
 
     if (available < withdrawAmount) {
-      console.warn(`Pot has insufficient funds (${available}) to cover deficit (${withdrawAmount}). Withdrawing all available.`);
+      logger.warn('Pot has insufficient funds to cover deficit', { available, needed: withdrawAmount });
       if (available > 0) {
         await client.withdrawFromPot(pot_id, {
             amount: available,
@@ -51,7 +52,7 @@ export async function balanceAccount(client: MonzoAPI, config: MonzoConfig) {
         });
       }
     } else {
-      console.log(`Withdrawing ${withdrawAmount} from pot ${pot_id}`);
+      logger.info('Withdrawing funds', { amount: withdrawAmount, potId: pot_id });
       await client.withdrawFromPot(pot_id, {
         amount: withdrawAmount,
         dedupe_id: dedupeId,

@@ -7,3 +7,6 @@ compatibility_flags = ["nodejs_compat"]
 [[kv_namespaces]]
 binding = "MONZO_CONFIG"
 id = "6ce717a7d95e44638bc8af2c4925beb9"
+
+[observability.logs]
+enabled = true
