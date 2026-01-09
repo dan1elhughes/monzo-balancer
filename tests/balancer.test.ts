@@ -1,93 +1,95 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { balanceAccount } from '../src/balancer';
-import { MonzoConfig } from '../src/types';
-import { castId } from '@otters/monzo';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { balanceAccount } from "../src/balancer";
+import { MonzoConfig } from "../src/types";
+import { castId } from "@otters/monzo";
 
-describe('balanceAccount', () => {
-    const mockClient = {
-        getBalance: vi.fn(),
-        depositIntoPot: vi.fn(),
-        getPots: vi.fn(),
-        withdrawFromPot: vi.fn(),
-    };
+describe("balanceAccount", () => {
+	const mockClient = {
+		getBalance: vi.fn(),
+		depositIntoPot: vi.fn(),
+		getPots: vi.fn(),
+		withdrawFromPot: vi.fn(),
+	};
 
-    const config: MonzoConfig = {
-        access_token: 'test_token',
-        refresh_token: 'test_refresh',
-        client_id: castId('oauth2client_123', 'oauth2client'),
-        client_secret: 'secret',
-        account_id: castId('acc_123', 'acc'),
-        pot_id: castId('pot_456', 'pot'),
-        target_balance: 1000 // £10.00
-    };
+	const config: MonzoConfig = {
+		access_token: "test_token",
+		refresh_token: "test_refresh",
+		client_id: castId("oauth2client_123", "oauth2client"),
+		client_secret: "secret",
+		account_id: castId("acc_123", "acc"),
+		pot_id: castId("pot_456", "pot"),
+		target_balance: 1000, // £10.00
+	};
 
-    beforeEach(() => {
-        vi.resetAllMocks();
-    });
+	beforeEach(() => {
+		vi.resetAllMocks();
+	});
 
-    it('does nothing when balance equals target', async () => {
-        mockClient.getBalance.mockResolvedValue({ balance: 1000 });
+	it("does nothing when balance equals target", async () => {
+		mockClient.getBalance.mockResolvedValue({ balance: 1000 });
 
-        await balanceAccount(mockClient as any, config);
+		await balanceAccount(mockClient as any, config);
 
-        expect(mockClient.depositIntoPot).not.toHaveBeenCalled();
-        expect(mockClient.withdrawFromPot).not.toHaveBeenCalled();
-    });
+		expect(mockClient.depositIntoPot).not.toHaveBeenCalled();
+		expect(mockClient.withdrawFromPot).not.toHaveBeenCalled();
+	});
 
-    it('deposits excess funds into pot when balance > target', async () => {
-        mockClient.getBalance.mockResolvedValue({ balance: 1500 }); // £15.00
+	it("deposits excess funds into pot when balance > target", async () => {
+		mockClient.getBalance.mockResolvedValue({ balance: 1500 }); // £15.00
 
-        await balanceAccount(mockClient as any, config);
+		await balanceAccount(mockClient as any, config);
 
-        expect(mockClient.depositIntoPot).toHaveBeenCalledWith(
-            config.pot_id,
-            expect.objectContaining({
-                amount: 500,
-                source_account_id: config.account_id
-            })
-        );
-        expect(mockClient.withdrawFromPot).not.toHaveBeenCalled();
-    });
+		expect(mockClient.depositIntoPot).toHaveBeenCalledWith(
+			config.pot_id,
+			expect.objectContaining({
+				amount: 500,
+				source_account_id: config.account_id,
+			}),
+		);
+		expect(mockClient.withdrawFromPot).not.toHaveBeenCalled();
+	});
 
-    it('withdraws funds from pot when balance < target', async () => {
-        mockClient.getBalance.mockResolvedValue({ balance: 800 }); // £8.00
-        mockClient.getPots.mockResolvedValue([
-            { id: config.pot_id, balance: 5000 } // Pot has plenty
-        ]);
+	it("withdraws funds from pot when balance < target", async () => {
+		mockClient.getBalance.mockResolvedValue({ balance: 800 }); // £8.00
+		mockClient.getPots.mockResolvedValue([
+			{ id: config.pot_id, balance: 5000 }, // Pot has plenty
+		]);
 
-        await balanceAccount(mockClient as any, config);
+		await balanceAccount(mockClient as any, config);
 
-        expect(mockClient.withdrawFromPot).toHaveBeenCalledWith(
-            config.pot_id,
-            expect.objectContaining({
-                amount: 200,
-                destination_account_id: config.account_id
-            })
-        );
-        expect(mockClient.depositIntoPot).not.toHaveBeenCalled();
-    });
-    
-    it('withdraws all available funds from pot when pot has insufficient funds', async () => {
-        mockClient.getBalance.mockResolvedValue({ balance: 500 }); // £5.00, need 500
-        mockClient.getPots.mockResolvedValue([
-            { id: config.pot_id, balance: 300 } // Pot only has 300
-        ]);
+		expect(mockClient.withdrawFromPot).toHaveBeenCalledWith(
+			config.pot_id,
+			expect.objectContaining({
+				amount: 200,
+				destination_account_id: config.account_id,
+			}),
+		);
+		expect(mockClient.depositIntoPot).not.toHaveBeenCalled();
+	});
 
-        await balanceAccount(mockClient as any, config);
+	it("withdraws all available funds from pot when pot has insufficient funds", async () => {
+		mockClient.getBalance.mockResolvedValue({ balance: 500 }); // £5.00, need 500
+		mockClient.getPots.mockResolvedValue([
+			{ id: config.pot_id, balance: 300 }, // Pot only has 300
+		]);
 
-        expect(mockClient.withdrawFromPot).toHaveBeenCalledWith(
-            config.pot_id,
-            expect.objectContaining({
-                amount: 300,
-                destination_account_id: config.account_id
-            })
-        );
-    });
-    
-    it('throws error if pot not found', async () => {
-        mockClient.getBalance.mockResolvedValue({ balance: 800 });
-        mockClient.getPots.mockResolvedValue([]); // No pots
+		await balanceAccount(mockClient as any, config);
 
-        await expect(balanceAccount(mockClient as any, config)).rejects.toThrow(/Pot .* not found/);
-    });
+		expect(mockClient.withdrawFromPot).toHaveBeenCalledWith(
+			config.pot_id,
+			expect.objectContaining({
+				amount: 300,
+				destination_account_id: config.account_id,
+			}),
+		);
+	});
+
+	it("throws error if pot not found", async () => {
+		mockClient.getBalance.mockResolvedValue({ balance: 800 });
+		mockClient.getPots.mockResolvedValue([]); // No pots
+
+		await expect(balanceAccount(mockClient as any, config)).rejects.toThrow(
+			/Pot .* not found/,
+		);
+	});
 });

@@ -38,11 +38,13 @@ Before setting up the Worker, you need to create a client in the Monzo Developer
 ## Setup
 
 ### 1. Install Dependencies
+
 ```bash
 npm install
 ```
 
 ### 2. Configuration
+
 You will need to set up the following secrets in your Cloudflare Worker environment (KV namespace `MONZO_CONFIG` or via `wrangler secret put`):
 
 - `MONZO_ACCESS_TOKEN`
@@ -54,13 +56,17 @@ You will need to set up the following secrets in your Cloudflare Worker environm
 - `TARGET_BALANCE` (in pennies, e.g., `100000` for £1000.00)
 
 ### 3. Development
+
 Start the local development server:
+
 ```bash
 npm run dev
 ```
 
 ### 4. Testing
+
 Run the unit test suite:
+
 ```bash
 npm test
 ```
@@ -68,13 +74,17 @@ npm test
 ## Deployment & Webhook Registration
 
 ### 1. Deploy
+
 Deploy the project to Cloudflare Workers:
+
 ```bash
 npm run deploy
 ```
+
 Make a note of the deployed Worker URL (e.g., `https://monzo-balancer.your-subdomain.workers.dev`).
 
 ### 2. Register Webhook
+
 To notify the Worker about transactions, you must register a webhook with Monzo.
 
 1.  Go back to the [Monzo Developer Portal](https://developers.monzo.com/).
@@ -85,6 +95,7 @@ To notify the Worker about transactions, you must register a webhook with Monzo.
     - `url`: The URL of your deployed Worker (from step 1).
 
 Example `curl`:
+
 ```bash
 curl -X POST "https://api.monzo.com/webhooks" \
   -H "Authorization: Bearer $YOUR_ACCESS_TOKEN" \
@@ -95,4 +106,3 @@ curl -X POST "https://api.monzo.com/webhooks" \
 Now, whenever a transaction occurs, Monzo will hit your Worker, and the Worker will balance your account.
 
 For more details on the Monzo API, refer to the [Monzo Documentation](https://docs.monzo.com/).
-
