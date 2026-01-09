@@ -12,6 +12,7 @@ export default {
     // Parse body to log and verify event type
     try {
       const body = await request.json() as any;
+      logger.info('Webhook received', { body });
       
       if (body.type !== 'transaction.created') {
         logger.info('Received non-transaction event', { type: body.type });
