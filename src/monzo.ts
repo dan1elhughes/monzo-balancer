@@ -75,7 +75,28 @@ export async function withMonzoClient<T>(
 		logger.warn("Monzo API call failed, attempting refresh", error);
 
 		try {
-			const newCreds = await client.refresh();
+			// Manually refresh token to avoid sending the expired access token in the header
+			// which the library's client.refresh() method does.
+			const params = new URLSearchParams();
+			params.append("grant_type", "refresh_token");
+			params.append("client_id", config.client_id);
+			params.append("client_secret", config.client_secret);
+			params.append("refresh_token", config.refresh_token);
+
+			const response = await fetch("https://api.monzo.com/oauth2/token", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: params,
+			});
+
+			if (!response.ok) {
+				const text = await response.text();
+				throw new Error(`Refresh failed with status ${response.status}: ${text}`);
+			}
+
+			const newCreds = (await response.json()) as any;
 			logger.info("Token refreshed successfully");
 
 			await saveTokens(env, newCreds.access_token, newCreds.refresh_token);
@@ -85,8 +106,19 @@ export async function withMonzoClient<T>(
 			const newConfig = { ...config, ...newCreds };
 
 			return await action(refreshedClient, newConfig);
-		} catch (refreshError) {
+		} catch (refreshError: any) {
 			logger.error("Failed to refresh token", refreshError);
+			if (refreshError.response) {
+				try {
+					const body = await refreshError.response.clone().text();
+					logger.error("Refresh error response", {
+						status: refreshError.response.status,
+						body,
+					});
+				} catch (e) {
+					logger.error("Failed to read refresh error response body", e);
+				}
+			}
 			throw refreshError; // Original error or refresh error
 		}
 	}
