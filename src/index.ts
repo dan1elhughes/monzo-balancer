@@ -324,6 +324,10 @@ async function handleSetupFinish(
 
 async function handleWebhook(request: Request, env: Env): Promise<Response> {
 	let accountId: any;
+	let transactionId: any;
+	let description: any;
+	let potId: any;
+
 	try {
 		const body = (await request.json()) as any;
 		logger.info(`Received ${body.type} event`, { body });
@@ -332,6 +336,10 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
 			return new Response("Ignored event type", { status: 200 });
 		}
 		accountId = body.data?.account_id;
+		transactionId = body.data?.id;
+		description = body.data?.description;
+		potId = body.data?.metadata?.pot_id;
+
 		if (!accountId) {
 			logger.error("Missing account_id in webhook body");
 			return new Response("Bad Request: Missing account_id", { status: 400 });
@@ -346,7 +354,17 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
 			env,
 			castId(accountId, "acc"),
 			async (client, config) => {
-				await balanceAccount(client, config);
+				if (
+					description === config.monzo_pot_id ||
+					potId === config.monzo_pot_id
+				) {
+					logger.info("Ignoring transaction related to managed pot", {
+						potId: config.monzo_pot_id,
+					});
+					return;
+				}
+
+				await balanceAccount(client, config, transactionId);
 			},
 		);
 	} catch (e) {

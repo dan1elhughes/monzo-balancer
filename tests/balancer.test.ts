@@ -90,4 +90,18 @@ describe("balanceAccount", () => {
 			/Pot .* not found/,
 		);
 	});
+
+	it("uses deterministic dedupe_id when triggeringTransactionId is provided", async () => {
+		mockClient.getBalance.mockResolvedValue({ balance: 1500 });
+		const txId = "tx_12345";
+
+		await balanceAccount(mockClient as any, config, txId);
+
+		expect(mockClient.depositIntoPot).toHaveBeenCalledWith(
+			config.monzo_pot_id,
+			expect.objectContaining({
+				dedupe_id: `balance-correction-${txId}`,
+			}),
+		);
+	});
 });

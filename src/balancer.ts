@@ -2,7 +2,11 @@ import { MonzoAPI } from "@otters/monzo";
 import { AccountConfig } from "./types";
 import { logger } from "./logger";
 
-export async function balanceAccount(client: MonzoAPI, config: AccountConfig) {
+export async function balanceAccount(
+	client: MonzoAPI,
+	config: AccountConfig,
+	triggeringTransactionId: string,
+) {
 	const { monzo_account_id, monzo_pot_id, target_balance } = config;
 
 	// 1. Get Balance
@@ -21,7 +25,7 @@ export async function balanceAccount(client: MonzoAPI, config: AccountConfig) {
 		return;
 	}
 
-	const dedupeId = crypto.randomUUID();
+	const dedupeId = `balance-correction-${triggeringTransactionId}`;
 
 	if (diff > 0) {
 		// Excess funds: Deposit to Pot
