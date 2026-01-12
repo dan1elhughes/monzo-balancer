@@ -344,11 +344,7 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
 		return new Response("Ignored event type", { status: 200 });
 	}
 
-	// Sleep for 5 seconds to debug infinite loop
 	logger.info(`Received ${body.type} event`, { body });
-	logger.info("Sleeping for 5 seconds to debug infinite loop");
-	await new Promise((resolve) => setTimeout(resolve, 5000));
-	logger.info("Done sleeping");
 
 	try {
 		accountId = body.data?.account_id;
