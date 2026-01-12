@@ -2,6 +2,7 @@ import { Env } from "./types";
 import { withMonzoClient } from "./monzo";
 import { balanceAccount } from "./balancer";
 import { logger } from "./logger";
+import { castId } from "@otters/monzo";
 
 export default {
 	async fetch(
@@ -13,7 +14,7 @@ export default {
 			return new Response("Method Not Allowed", { status: 405 });
 		}
 
-		// Parse body to log and verify event type
+		let accountId: any;
 		try {
 			const body = (await request.json()) as any;
 			logger.info(`Received ${body.type} event`, { body });
@@ -21,18 +22,18 @@ export default {
 			if (body.type !== "transaction.created") {
 				return new Response("Ignored event type", { status: 200 });
 			}
-
-			// We don't necessarily need the transaction amount from the webhook,
-			// because we just check the current balance against the target.
-			// This handles race conditions better (e.g. multiple transactions coming in).
+			accountId = body.data?.account_id;
+			if (!accountId) {
+				logger.error("Missing account_id in webhook body");
+				return new Response("Bad Request: Missing account_id", { status: 400 });
+			}
 		} catch (e) {
 			logger.error("Error parsing webhook body", e);
 			return new Response("Bad Request", { status: 400 });
 		}
 
-		// Trigger balancing logic asynchronously
 		ctx.waitUntil(
-			withMonzoClient(env, async (client, config) => {
+			withMonzoClient(env, castId(accountId, "acc"), async (client, config) => {
 				await balanceAccount(client, config);
 			}).catch((err) => {
 				logger.error("Balancing logic failed", err);

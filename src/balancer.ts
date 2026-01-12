@@ -1,12 +1,12 @@
 import { MonzoAPI } from "@otters/monzo";
-import { MonzoConfig } from "./types";
+import { AccountConfig } from "./types";
 import { logger } from "./logger";
 
-export async function balanceAccount(client: MonzoAPI, config: MonzoConfig) {
-	const { account_id, pot_id, target_balance } = config;
+export async function balanceAccount(client: MonzoAPI, config: AccountConfig) {
+	const { monzo_account_id, monzo_pot_id, target_balance } = config;
 
 	// 1. Get Balance
-	const balanceData = await client.getBalance(account_id);
+	const balanceData = await client.getBalance(monzo_account_id);
 	const currentBalance = balanceData.balance;
 
 	logger.info("Checking balance", {
@@ -25,19 +25,22 @@ export async function balanceAccount(client: MonzoAPI, config: MonzoConfig) {
 
 	if (diff > 0) {
 		// Excess funds: Deposit to Pot
-		logger.info("Depositing excess funds", { amount: diff, potId: pot_id });
-		await client.depositIntoPot(pot_id, {
+		logger.info("Depositing excess funds", {
+			amount: diff,
+			potId: monzo_pot_id,
+		});
+		await client.depositIntoPot(monzo_pot_id, {
 			amount: diff,
 			dedupe_id: dedupeId,
-			source_account_id: account_id,
+			source_account_id: monzo_account_id,
 		});
 	} else {
 		// Deficit: Withdraw from Pot
-		const pots = await client.getPots(account_id);
-		const targetPot = pots.find((p) => p.id === pot_id);
+		const pots = await client.getPots(monzo_account_id);
+		const targetPot = pots.find((p) => p.id === monzo_pot_id);
 
 		if (!targetPot) {
-			throw new Error(`Pot ${pot_id} not found`);
+			throw new Error(`Pot ${monzo_pot_id} not found`);
 		}
 
 		const withdrawAmount = Math.abs(diff);
@@ -54,21 +57,21 @@ export async function balanceAccount(client: MonzoAPI, config: MonzoConfig) {
 				needed: withdrawAmount,
 			});
 			if (available > 0) {
-				await client.withdrawFromPot(pot_id, {
+				await client.withdrawFromPot(monzo_pot_id, {
 					amount: available,
 					dedupe_id: dedupeId,
-					destination_account_id: account_id,
+					destination_account_id: monzo_account_id,
 				});
 			}
 		} else {
 			logger.info("Withdrawing funds", {
 				amount: withdrawAmount,
-				potId: pot_id,
+				potId: monzo_pot_id,
 			});
-			await client.withdrawFromPot(pot_id, {
+			await client.withdrawFromPot(monzo_pot_id, {
 				amount: withdrawAmount,
 				dedupe_id: dedupeId,
-				destination_account_id: account_id,
+				destination_account_id: monzo_account_id,
 			});
 		}
 	}
