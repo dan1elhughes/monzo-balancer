@@ -11,3 +11,7 @@ database_id = "your-database-id-here" # Replace with actual DB ID after creation
 
 [observability.logs]
 enabled = true
+
+[vars]
+MONZO_CLIENT_ID = "your-client-id-here"
+MONZO_REDIRECT_URI = "https://your-worker-url/oauth/callback"

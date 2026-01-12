@@ -2,6 +2,9 @@ import { Id } from "@otters/monzo";
 
 export interface Env {
 	DB: D1Database;
+	MONZO_CLIENT_ID: string;
+	MONZO_CLIENT_SECRET: string;
+	MONZO_REDIRECT_URI: string;
 }
 
 export interface AccountConfig {
