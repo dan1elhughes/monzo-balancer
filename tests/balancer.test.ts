@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { balanceAccount } from "../src/balancer";
-import { MonzoConfig } from "../src/types";
+import { AccountConfig } from "../src/types";
 import { castId } from "@otters/monzo";
 
 describe("balanceAccount", () => {
@@ -11,13 +11,13 @@ describe("balanceAccount", () => {
 		withdrawFromPot: vi.fn(),
 	};
 
-	const config: MonzoConfig = {
+	const config: AccountConfig = {
 		access_token: "test_token",
 		refresh_token: "test_refresh",
 		client_id: castId("oauth2client_123", "oauth2client"),
 		client_secret: "secret",
-		account_id: castId("acc_123", "acc"),
-		pot_id: castId("pot_456", "pot"),
+		monzo_account_id: castId("acc_123", "acc"),
+		monzo_pot_id: castId("pot_456", "pot"),
 		target_balance: 1000, // £10.00
 	};
 
@@ -40,10 +40,10 @@ describe("balanceAccount", () => {
 		await balanceAccount(mockClient as any, config);
 
 		expect(mockClient.depositIntoPot).toHaveBeenCalledWith(
-			config.pot_id,
+			config.monzo_pot_id,
 			expect.objectContaining({
 				amount: 500,
-				source_account_id: config.account_id,
+				source_account_id: config.monzo_account_id,
 			}),
 		);
 		expect(mockClient.withdrawFromPot).not.toHaveBeenCalled();
@@ -52,16 +52,16 @@ describe("balanceAccount", () => {
 	it("withdraws funds from pot when balance < target", async () => {
 		mockClient.getBalance.mockResolvedValue({ balance: 800 }); // £8.00
 		mockClient.getPots.mockResolvedValue([
-			{ id: config.pot_id, balance: 5000 }, // Pot has plenty
+			{ id: config.monzo_pot_id, balance: 5000 }, // Pot has plenty
 		]);
 
 		await balanceAccount(mockClient as any, config);
 
 		expect(mockClient.withdrawFromPot).toHaveBeenCalledWith(
-			config.pot_id,
+			config.monzo_pot_id,
 			expect.objectContaining({
 				amount: 200,
-				destination_account_id: config.account_id,
+				destination_account_id: config.monzo_account_id,
 			}),
 		);
 		expect(mockClient.depositIntoPot).not.toHaveBeenCalled();
@@ -70,16 +70,16 @@ describe("balanceAccount", () => {
 	it("withdraws all available funds from pot when pot has insufficient funds", async () => {
 		mockClient.getBalance.mockResolvedValue({ balance: 500 }); // £5.00, need 500
 		mockClient.getPots.mockResolvedValue([
-			{ id: config.pot_id, balance: 300 }, // Pot only has 300
+			{ id: config.monzo_pot_id, balance: 300 }, // Pot only has 300
 		]);
 
 		await balanceAccount(mockClient as any, config);
 
 		expect(mockClient.withdrawFromPot).toHaveBeenCalledWith(
-			config.pot_id,
+			config.monzo_pot_id,
 			expect.objectContaining({
 				amount: 300,
-				destination_account_id: config.account_id,
+				destination_account_id: config.monzo_account_id,
 			}),
 		);
 	});
