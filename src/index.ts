@@ -164,31 +164,33 @@ async function renderAccountSelection(
 		);
 	}
 
-	// Fetch pots for all accounts
-	const accountsWithPots = await Promise.all(
+	// Fetch pots and balances for all accounts
+	const accountsWithData = await Promise.all(
 		accounts.map(async (acc) => {
 			try {
-				const pots = await client.getPots(acc.id);
-				return { ...acc, pots };
+				const [pots, balance] = await Promise.all([
+					client.getPots(acc.id),
+					client.getBalance(acc.id).catch((e) => {
+						logger.error(`Failed to fetch balance for account ${acc.id}`, e);
+						return { balance: 0, currency: "GBP" };
+					}),
+				]);
+				return { ...acc, pots, balance: balance as any };
 			} catch (e) {
-				logger.error(`Failed to fetch pots for account ${acc.id}`, e);
-				return { ...acc, pots: [] };
+				logger.error(`Failed to fetch data for account ${acc.id}`, e);
+				return { ...acc, pots: [], balance: { balance: 0, currency: "GBP" } };
 			}
 		}),
 	);
 
-	const accountsHtml = accountsWithPots
-		.map(
-			(acc) =>
-				`<option value="${acc.id}">${acc.description} (${acc.id})</option>`,
-		)
+	const accountsHtml = accountsWithData
+		.map((acc) => {
+			const balance = (acc.balance.balance / 100).toFixed(2);
+			return `<option value="${acc.id}">${acc.description} (${acc.type}, £${balance})</option>`;
+		})
 		.join("");
 
-	// Group pots by account for display, or just list them all?
-	// The prompt says "show an account list and pot list".
-	// Ideally the user picks an account, and the pot list updates, but this is a simple static form.
-	// I'll just list all pots, perhaps with the account name in the label.
-	const potsHtml = accountsWithPots
+	const potsHtml = accountsWithData
 		.flatMap((acc) =>
 			acc.pots.map(
 				(pot: any) =>
@@ -231,8 +233,8 @@ async function renderAccountSelection(
           </div>
 
           <div class="form-group">
-            <label for="targetBalance">Target Balance (in pennies)</label>
-            <input type="number" name="targetBalance" id="targetBalance" required min="0" placeholder="e.g. 1000 for £10.00" />
+            <label for="targetBalance">Target Balance (£)</label>
+            <input type="number" name="targetBalance" id="targetBalance" required min="0" step="0.01" placeholder="e.g. 10.00" />
           </div>
 
           <button type="submit">Save Configuration</button>
@@ -309,7 +311,7 @@ async function handleSetupFinish(
 	).bind(
 		accountId,
 		potId,
-		parseInt(targetBalance, 10),
+		Math.round(parseFloat(targetBalance) * 100),
 		access_token,
 		refresh_token,
 		Date.now(),
