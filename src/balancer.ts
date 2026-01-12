@@ -33,6 +33,12 @@ export async function balanceAccount(
 			amount: diff,
 			potId: monzo_pot_id,
 		});
+
+		if (config.dry_run) {
+			logger.info("Dry run enabled, skipping deposit");
+			return;
+		}
+
 		await client.depositIntoPot(monzo_pot_id, {
 			amount: diff,
 			dedupe_id: dedupeId,
@@ -61,6 +67,11 @@ export async function balanceAccount(
 				needed: withdrawAmount,
 			});
 			if (available > 0) {
+				if (config.dry_run) {
+					logger.info("Dry run enabled, skipping partial withdrawal");
+					return;
+				}
+
 				await client.withdrawFromPot(monzo_pot_id, {
 					amount: available,
 					dedupe_id: dedupeId,
@@ -72,6 +83,12 @@ export async function balanceAccount(
 				amount: withdrawAmount,
 				potId: monzo_pot_id,
 			});
+
+			if (config.dry_run) {
+				logger.info("Dry run enabled, skipping withdrawal");
+				return;
+			}
+
 			await client.withdrawFromPot(monzo_pot_id, {
 				amount: withdrawAmount,
 				dedupe_id: dedupeId,

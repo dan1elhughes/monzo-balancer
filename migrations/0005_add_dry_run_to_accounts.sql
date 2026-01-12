@@ -1,0 +1,1 @@
+ALTER TABLE accounts ADD COLUMN dry_run BOOLEAN DEFAULT 0;

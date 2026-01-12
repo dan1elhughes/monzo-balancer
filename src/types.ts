@@ -13,4 +13,5 @@ export interface AccountConfig {
 	monzo_account_id: Id<"acc">;
 	monzo_pot_id: Id<"pot">;
 	target_balance: number; // in pennies
+	dry_run: boolean;
 }

@@ -17,6 +17,7 @@ describe("balanceAccount", () => {
 		monzo_account_id: castId("acc_123", "acc"),
 		monzo_pot_id: castId("pot_456", "pot"),
 		target_balance: 1000, // £10.00
+		dry_run: false,
 	};
 
 	beforeEach(() => {
@@ -26,7 +27,7 @@ describe("balanceAccount", () => {
 	it("does nothing when balance equals target", async () => {
 		mockClient.getBalance.mockResolvedValue({ balance: 1000 });
 
-		await balanceAccount(mockClient as any, config);
+		await balanceAccount(mockClient as any, config, "tx_123");
 
 		expect(mockClient.depositIntoPot).not.toHaveBeenCalled();
 		expect(mockClient.withdrawFromPot).not.toHaveBeenCalled();
@@ -35,7 +36,7 @@ describe("balanceAccount", () => {
 	it("deposits excess funds into pot when balance > target", async () => {
 		mockClient.getBalance.mockResolvedValue({ balance: 1500 }); // £15.00
 
-		await balanceAccount(mockClient as any, config);
+		await balanceAccount(mockClient as any, config, "tx_123");
 
 		expect(mockClient.depositIntoPot).toHaveBeenCalledWith(
 			config.monzo_pot_id,
@@ -53,7 +54,7 @@ describe("balanceAccount", () => {
 			{ id: config.monzo_pot_id, balance: 5000 }, // Pot has plenty
 		]);
 
-		await balanceAccount(mockClient as any, config);
+		await balanceAccount(mockClient as any, config, "tx_123");
 
 		expect(mockClient.withdrawFromPot).toHaveBeenCalledWith(
 			config.monzo_pot_id,
@@ -71,7 +72,7 @@ describe("balanceAccount", () => {
 			{ id: config.monzo_pot_id, balance: 300 }, // Pot only has 300
 		]);
 
-		await balanceAccount(mockClient as any, config);
+		await balanceAccount(mockClient as any, config, "tx_123");
 
 		expect(mockClient.withdrawFromPot).toHaveBeenCalledWith(
 			config.monzo_pot_id,
@@ -86,9 +87,9 @@ describe("balanceAccount", () => {
 		mockClient.getBalance.mockResolvedValue({ balance: 800 });
 		mockClient.getPots.mockResolvedValue([]); // No pots
 
-		await expect(balanceAccount(mockClient as any, config)).rejects.toThrow(
-			/Pot .* not found/,
-		);
+		await expect(
+			balanceAccount(mockClient as any, config, "tx_123"),
+		).rejects.toThrow(/Pot .* not found/);
 	});
 
 	it("uses deterministic dedupe_id when triggeringTransactionId is provided", async () => {
@@ -103,5 +104,26 @@ describe("balanceAccount", () => {
 				dedupe_id: `balance-correction-${txId}`,
 			}),
 		);
+	});
+
+	it("skips deposit when dry_run is true", async () => {
+		mockClient.getBalance.mockResolvedValue({ balance: 1500 });
+		const dryRunConfig = { ...config, dry_run: true };
+
+		await balanceAccount(mockClient as any, dryRunConfig, "tx_123");
+
+		expect(mockClient.depositIntoPot).not.toHaveBeenCalled();
+	});
+
+	it("skips withdrawal when dry_run is true", async () => {
+		mockClient.getBalance.mockResolvedValue({ balance: 800 });
+		mockClient.getPots.mockResolvedValue([
+			{ id: config.monzo_pot_id, balance: 5000 },
+		]);
+		const dryRunConfig = { ...config, dry_run: true };
+
+		await balanceAccount(mockClient as any, dryRunConfig, "tx_123");
+
+		expect(mockClient.withdrawFromPot).not.toHaveBeenCalled();
 	});
 });

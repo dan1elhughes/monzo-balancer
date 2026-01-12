@@ -19,6 +19,7 @@ export async function getMonzoConfig(
 		...result,
 		monzo_account_id: castId(result.monzo_account_id, "acc"),
 		monzo_pot_id: castId(result.monzo_pot_id, "pot"),
+		dry_run: !!result.dry_run,
 	};
 }
 

@@ -192,10 +192,12 @@ async function renderAccountSelection(
 
 	const potsHtml = accountsWithData
 		.flatMap((acc) =>
-			acc.pots.map(
-				(pot: any) =>
-					`<option value="${pot.id}">${pot.name} (${acc.description})</option>`,
-			),
+			acc.pots
+				.filter((pot: any) => !pot.deleted)
+				.map((pot: any) => {
+					const balance = (pot.balance / 100).toFixed(2);
+					return `<option value="${pot.id}">${pot.name} (${acc.description}, £${balance})</option>`;
+				}),
 		)
 		.join("");
 
@@ -217,7 +219,7 @@ async function renderAccountSelection(
         <form action="/setup/finish" method="POST">
           <input type="hidden" name="access_token" value="${access_token}" />
           <input type="hidden" name="refresh_token" value="${refresh_token}" />
-          
+
           <div class="form-group">
             <label for="accountId">Select Account</label>
             <select name="accountId" id="accountId" required>
@@ -235,6 +237,13 @@ async function renderAccountSelection(
           <div class="form-group">
             <label for="targetBalance">Target Balance (£)</label>
             <input type="number" name="targetBalance" id="targetBalance" required min="0" step="0.01" placeholder="e.g. 10.00" />
+          </div>
+
+          <div class="form-group">
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" name="dryRun" id="dryRun" value="true" style="width: auto;" />
+              <span>Dry Run Mode (Simulate only - no money moved)</span>
+            </label>
           </div>
 
           <button type="submit">Save Configuration</button>
@@ -258,6 +267,7 @@ async function handleSetupFinish(
 	const accountId = formData.get("accountId") as string;
 	const potId = formData.get("potId") as string;
 	const targetBalance = formData.get("targetBalance") as string;
+	const dryRun = formData.get("dryRun") === "true";
 
 	if (
 		!access_token ||
@@ -306,8 +316,8 @@ async function handleSetupFinish(
 
 	// Save to D1
 	const stmt = env.DB.prepare(
-		`INSERT OR REPLACE INTO accounts (monzo_account_id, monzo_pot_id, target_balance, access_token, refresh_token, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO accounts (monzo_account_id, monzo_pot_id, target_balance, access_token, refresh_token, created_at, updated_at, dry_run)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 	).bind(
 		accountId,
 		potId,
@@ -316,6 +326,7 @@ async function handleSetupFinish(
 		refresh_token,
 		Date.now(),
 		Date.now(),
+		dryRun ? 1 : 0,
 	);
 	await stmt.run();
 
@@ -328,13 +339,18 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
 	let description: any;
 	let potId: any;
 
-	try {
-		const body = (await request.json()) as any;
-		logger.info(`Received ${body.type} event`, { body });
+	const body = (await request.json()) as any;
+	if (body.type !== "transaction.created") {
+		return new Response("Ignored event type", { status: 200 });
+	}
 
-		if (body.type !== "transaction.created") {
-			return new Response("Ignored event type", { status: 200 });
-		}
+	// Sleep for 5 seconds to debug infinite loop
+	logger.info(`Received ${body.type} event`, { body });
+	logger.info("Sleeping for 5 seconds to debug infinite loop");
+	await new Promise((resolve) => setTimeout(resolve, 5000));
+	logger.info("Done sleeping");
+
+	try {
 		accountId = body.data?.account_id;
 		transactionId = body.data?.id;
 		description = body.data?.description;
