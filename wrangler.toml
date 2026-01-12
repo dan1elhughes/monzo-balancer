@@ -7,11 +7,11 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "monzo-balancer"
-database_id = "your-database-id-here" # Replace with actual DB ID after creation
+database_id = "6abc45d1-f74c-4968-8450-e1b784d5c231"
 
 [observability.logs]
 enabled = true
 
 [vars]
-MONZO_CLIENT_ID = "your-client-id-here"
-MONZO_REDIRECT_URI = "https://your-worker-url/oauth/callback"
+MONZO_CLIENT_ID = "oauth2client_0000B253u1ZmFYn2GzFWLK"
+MONZO_REDIRECT_URI = "https://monzo-balancer.dh.workers.dev/oauth/callback"
