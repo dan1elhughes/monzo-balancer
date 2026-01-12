@@ -96,7 +96,19 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 	);
 
 	// Get accounts
-	const accounts = await client.getAccounts();
+	logger.info("Fetching accounts...");
+	let accounts;
+	try {
+		accounts = await client.getAccounts();
+		logger.info("Accounts fetched successfully", { count: accounts.length });
+	} catch (e) {
+		logger.error("Failed to fetch accounts", e);
+		return new Response(
+			"Failed to fetch accounts from Monzo (403? Check App Approval)",
+			{ status: 500 },
+		);
+	}
+
 	const account = accounts.find((a) => a.type === "uk_retail");
 	if (!account) {
 		return new Response("No retail account found", { status: 400 });
@@ -104,7 +116,16 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 	const accountId = account.id;
 
 	// Get pots
-	const pots = await client.getPots(accountId);
+	logger.info(`Fetching pots for account ${accountId}...`);
+	let pots;
+	try {
+		pots = await client.getPots(accountId);
+		logger.info("Pots fetched successfully", { count: pots.length });
+	} catch (e) {
+		logger.error("Failed to fetch pots", e);
+		return new Response("Failed to fetch pots from Monzo", { status: 500 });
+	}
+
 	const pot = pots.find((p) => p.name === potName);
 	if (!pot) {
 		return new Response(`Pot with name "${potName}" not found`, {
@@ -117,6 +138,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 	const workerUrl = new URL(request.url);
 	const webhookUrl = `${workerUrl.protocol}//${workerUrl.host}/`;
 
+	logger.info("Checking webhooks...");
 	const webhooksResponse = await fetch(
 		`https://api.monzo.com/webhooks?account_id=${accountId}`,
 		{
@@ -125,7 +147,10 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 	);
 	if (!webhooksResponse.ok) {
 		const text = await webhooksResponse.text();
-		logger.error("Failed to list webhooks", { text });
+		logger.error("Failed to list webhooks", {
+			status: webhooksResponse.status,
+			text,
+		});
 		return new Response(`Failed to list webhooks: ${text}`, { status: 500 });
 	}
 	const { webhooks } = (await webhooksResponse.json()) as {
@@ -134,6 +159,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 	const webhookExists = webhooks.some((w) => w.url === webhookUrl);
 
 	if (!webhookExists) {
+		logger.info("Registering new webhook...");
 		const registerResponse = await fetch("https://api.monzo.com/webhooks", {
 			method: "POST",
 			headers: {
@@ -145,7 +171,10 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 
 		if (!registerResponse.ok) {
 			const text = await registerResponse.text();
-			logger.error("Failed to register webhook", { text });
+			logger.error("Failed to register webhook", {
+				status: registerResponse.status,
+				text,
+			});
 			return new Response(`Failed to register webhook: ${text}`, {
 				status: 500,
 			});
