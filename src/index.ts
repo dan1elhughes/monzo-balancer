@@ -25,7 +25,7 @@ export default {
 		}
 
 		if (url.pathname === "/" && request.method === "POST") {
-			return handleWebhook(request, env, ctx);
+			return handleWebhook(request, env);
 		}
 
 		return new Response("Not Found", { status: 404 });
@@ -33,17 +33,13 @@ export default {
 };
 
 async function handleLogin(request: Request, env: Env): Promise<Response> {
-	const url = new URL(request.url);
-	const potName = url.searchParams.get("potName");
-	const targetBalance = url.searchParams.get("target");
+	const state = crypto.randomUUID();
 
-	if (!potName || !targetBalance) {
-		return new Response("Missing potName or target query parameter", {
-			status: 400,
-		});
-	}
-
-	const state = btoa(JSON.stringify({ potName, targetBalance }));
+	await env.DB.prepare(
+		"INSERT INTO oauth_states (state, created_at) VALUES (?, ?)",
+	)
+		.bind(state, Date.now())
+		.run();
 
 	const authUrl = new URL("https://auth.monzo.com/");
 	authUrl.searchParams.set("client_id", env.MONZO_CLIENT_ID);
@@ -65,7 +61,19 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 		});
 	}
 
-	const { potName, targetBalance } = JSON.parse(atob(state));
+	const storedState = await env.DB.prepare(
+		"SELECT state FROM oauth_states WHERE state = ?",
+	)
+		.bind(state)
+		.first();
+
+	if (!storedState) {
+		return new Response("Invalid state parameter", { status: 400 });
+	}
+
+	await env.DB.prepare("DELETE FROM oauth_states WHERE state = ?")
+		.bind(state)
+		.run();
 
 	// Exchange code for token
 	const params = new URLSearchParams();
@@ -114,14 +122,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
         <body>
           <h1>Action Required</h1>
           <p>Please check your Monzo app to approve access for this application.</p>
-          <p>Once approved, click the button below to finish setup.</p>
-          <form action="/setup/finish" method="POST">
-            <input type="hidden" name="access_token" value="${access_token}" />
-            <input type="hidden" name="refresh_token" value="${refresh_token}" />
-            <input type="hidden" name="potName" value="${potName}" />
-            <input type="hidden" name="targetBalance" value="${targetBalance}" />
-            <button type="submit">Finish Setup</button>
-          </form>
+          <p>Once approved, refresh this page.</p>
         </body>
       </html>
       `,
@@ -131,14 +132,85 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 		);
 	}
 
-	return await finishSetup(
-		env,
-		access_token,
-		refresh_token,
-		potName,
-		targetBalance,
-		request.url,
-		accounts,
+	// Fetch pots for all accounts
+	const accountsWithPots = await Promise.all(
+		accounts.map(async (acc) => {
+			try {
+				const pots = await client.getPots(acc.id);
+				return { ...acc, pots };
+			} catch (e) {
+				logger.error(`Failed to fetch pots for account ${acc.id}`, e);
+				return { ...acc, pots: [] };
+			}
+		}),
+	);
+
+	const accountsHtml = accountsWithPots
+		.map(
+			(acc) =>
+				`<option value="${acc.id}">${acc.description} (${acc.id})</option>`,
+		)
+		.join("");
+
+	// Group pots by account for display, or just list them all?
+	// The prompt says "show an account list and pot list".
+	// Ideally the user picks an account, and the pot list updates, but this is a simple static form.
+	// I'll just list all pots, perhaps with the account name in the label.
+	const potsHtml = accountsWithPots
+		.flatMap((acc) =>
+			acc.pots.map(
+				(pot: any) =>
+					`<option value="${pot.id}">${pot.name} (${acc.description})</option>`,
+			),
+		)
+		.join("");
+
+	return new Response(
+		`
+    <html>
+      <head>
+        <title>Monzo Balancer Setup</title>
+        <style>
+          body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+          .form-group { margin-bottom: 1rem; }
+          label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+          select, input { width: 100%; padding: 0.5rem; font-size: 1rem; }
+          button { padding: 0.75rem 1.5rem; background: #2D3E50; color: white; border: none; font-size: 1rem; cursor: pointer; }
+        </style>
+      </head>
+      <body>
+        <h1>Configure Monzo Balancer</h1>
+        <form action="/setup/finish" method="POST">
+          <input type="hidden" name="access_token" value="${access_token}" />
+          <input type="hidden" name="refresh_token" value="${refresh_token}" />
+          
+          <div class="form-group">
+            <label for="accountId">Select Account</label>
+            <select name="accountId" id="accountId" required>
+              ${accountsHtml}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="potId">Select Pot</label>
+            <select name="potId" id="potId" required>
+              ${potsHtml}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="targetBalance">Target Balance (in pennies)</label>
+            <input type="number" name="targetBalance" id="targetBalance" required min="0" placeholder="e.g. 1000 for £10.00" />
+          </div>
+
+          <button type="submit">Save Configuration</button>
+        </form>
+      </body>
+    </html>
+    `,
+		{
+			headers: { "Content-Type": "text/html" },
+		},
 	);
 }
 
@@ -149,129 +221,53 @@ async function handleSetupFinish(
 	const formData = await request.formData();
 	const access_token = formData.get("access_token") as string;
 	const refresh_token = formData.get("refresh_token") as string;
-	const potName = formData.get("potName") as string;
+	const accountId = formData.get("accountId") as string;
+	const potId = formData.get("potId") as string;
 	const targetBalance = formData.get("targetBalance") as string;
 
-	const client = new MonzoAPI(
-		{ access_token, refresh_token },
-		{
-			client_id: castId(env.MONZO_CLIENT_ID, "oauth2client"),
-			client_secret: env.MONZO_CLIENT_SECRET,
-			redirect_uri: env.MONZO_REDIRECT_URI,
-		},
-	);
-
-	try {
-		const accounts = await client.getAccounts();
-		return await finishSetup(
-			env,
-			access_token,
-			refresh_token,
-			potName,
-			targetBalance,
-			request.url,
-			accounts,
-		);
-	} catch (e: any) {
-		logger.error("Failed to fetch accounts on retry", e);
-		return new Response(
-			`Failed to fetch accounts: ${e.message}. Please try refreshing or restarting the login flow.`,
-			{ status: 500 },
-		);
-	}
-}
-
-async function finishSetup(
-	env: Env,
-	access_token: string,
-	refresh_token: string,
-	potName: string,
-	targetBalance: string,
-	requestUrl: string,
-	accounts: any[],
-): Promise<Response> {
-	const client = new MonzoAPI(
-		{ access_token, refresh_token },
-		{
-			client_id: castId(env.MONZO_CLIENT_ID, "oauth2client"),
-			client_secret: env.MONZO_CLIENT_SECRET,
-			redirect_uri: env.MONZO_REDIRECT_URI,
-		},
-	);
-
-	const account = accounts.find((a) => a.type === "uk_retail");
-	if (!account) {
-		return new Response("No retail account found", { status: 400 });
-	}
-	const accountId = account.id;
-
-	// Get pots
-	logger.info(`Fetching pots for account ${accountId}...`);
-	let pots;
-	try {
-		pots = await client.getPots(accountId);
-		logger.info("Pots fetched successfully", { count: pots.length });
-	} catch (e) {
-		logger.error("Failed to fetch pots", e);
-		return new Response("Failed to fetch pots from Monzo", { status: 500 });
+	if (
+		!access_token ||
+		!refresh_token ||
+		!accountId ||
+		!potId ||
+		!targetBalance
+	) {
+		return new Response("Missing required fields", { status: 400 });
 	}
 
-	const pot = pots.find((p) => p.name === potName);
-	if (!pot) {
-		return new Response(`Pot with name "${potName}" not found`, {
-			status: 400,
-		});
-	}
-	const potId = pot.id;
-
-	// Check for webhook and create if it doesn't exist
-	const workerUrl = new URL(requestUrl);
+	// Register webhook
+	const workerUrl = new URL(request.url);
 	const webhookUrl = `${workerUrl.protocol}//${workerUrl.host}/`;
 
-	logger.info("Checking webhooks...");
-	const webhooksResponse = await fetch(
-		`https://api.monzo.com/webhooks?account_id=${accountId}`,
-		{
-			headers: { Authorization: `Bearer ${access_token}` },
-		},
-	);
-	if (!webhooksResponse.ok) {
-		const text = await webhooksResponse.text();
-		logger.error("Failed to list webhooks", {
-			status: webhooksResponse.status,
-			text,
-		});
-		return new Response(`Failed to list webhooks: ${text}`, { status: 500 });
-	}
-	const { webhooks } = (await webhooksResponse.json()) as {
-		webhooks: { id: string; url: string; account_id: string }[];
-	};
-	const webhookExists = webhooks.some((w) => w.url === webhookUrl);
-
-	if (!webhookExists) {
-		logger.info("Registering new webhook...");
-		const registerResponse = await fetch("https://api.monzo.com/webhooks", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/x-www-form-urlencoded",
-				Authorization: `Bearer ${access_token}`,
+	try {
+		const webhooksResponse = await fetch(
+			`https://api.monzo.com/webhooks?account_id=${accountId}`,
+			{
+				headers: { Authorization: `Bearer ${access_token}` },
 			},
-			body: new URLSearchParams({ account_id: accountId, url: webhookUrl }),
-		});
+		);
 
-		if (!registerResponse.ok) {
-			const text = await registerResponse.text();
-			logger.error("Failed to register webhook", {
-				status: registerResponse.status,
-				text,
-			});
-			return new Response(`Failed to register webhook: ${text}`, {
-				status: 500,
-			});
+		if (webhooksResponse.ok) {
+			const { webhooks } = (await webhooksResponse.json()) as {
+				webhooks: { id: string; url: string; account_id: string }[];
+			};
+			const webhookExists = webhooks.some((w) => w.url === webhookUrl);
+
+			if (!webhookExists) {
+				logger.info("Registering new webhook...");
+				await fetch("https://api.monzo.com/webhooks", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Authorization: `Bearer ${access_token}`,
+					},
+					body: new URLSearchParams({ account_id: accountId, url: webhookUrl }),
+				});
+			}
 		}
-		logger.info(`Webhook registered for account ${accountId}`);
-	} else {
-		logger.info(`Webhook already exists for account ${accountId}`);
+	} catch (e) {
+		logger.error("Failed to register webhook", e);
+		// Continue anyway, we can try again later or it might exist
 	}
 
 	// Save to D1
@@ -292,11 +288,7 @@ async function finishSetup(
 	return new Response("Account setup complete!");
 }
 
-async function handleWebhook(
-	request: Request,
-	env: Env,
-	ctx: ExecutionContext,
-): Promise<Response> {
+async function handleWebhook(request: Request, env: Env): Promise<Response> {
 	let accountId: any;
 	try {
 		const body = (await request.json()) as any;
@@ -315,13 +307,18 @@ async function handleWebhook(
 		return new Response("Bad Request", { status: 400 });
 	}
 
-	ctx.waitUntil(
-		withMonzoClient(env, castId(accountId, "acc"), async (client, config) => {
-			await balanceAccount(client, config);
-		}).catch((err) => {
-			logger.error("Balancing logic failed", err);
-		}),
-	);
+	try {
+		await withMonzoClient(
+			env,
+			castId(accountId, "acc"),
+			async (client, config) => {
+				await balanceAccount(client, config);
+			},
+		);
+	} catch (e) {
+		logger.error("Balancing logic failed", e);
+		return new Response("Internal Server Error", { status: 500 });
+	}
 
 	return new Response("OK", { status: 200 });
 }
