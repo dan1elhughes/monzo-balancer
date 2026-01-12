@@ -45,7 +45,6 @@ describe("Monzo Configuration", () => {
 			monzo_account_id: "acc_123",
 			monzo_pot_id: "pot_123",
 			target_balance: 2000,
-			client_id: "oauth2client_123",
 			access_token: "access",
 			refresh_token: "refresh",
 		};

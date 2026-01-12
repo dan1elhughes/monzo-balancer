@@ -5,6 +5,7 @@ CREATE TABLE accounts (
   monzo_pot_id TEXT NOT NULL,
   target_balance INTEGER NOT NULL,
   client_id TEXT NOT NULL,
+  client_secret TEXT NOT NULL,
   access_token TEXT NOT NULL,
   refresh_token TEXT NOT NULL,
   created_at INTEGER,

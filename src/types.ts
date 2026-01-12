@@ -10,7 +10,6 @@ export interface Env {
 export interface AccountConfig {
 	access_token: string;
 	refresh_token: string;
-	client_id: Id<"oauth2client">;
 	monzo_account_id: Id<"acc">;
 	monzo_pot_id: Id<"pot">;
 	target_balance: number; // in pennies

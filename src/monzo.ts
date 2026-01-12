@@ -17,7 +17,6 @@ export async function getMonzoConfig(
 
 	return {
 		...result,
-		client_id: castId(result.client_id, "oauth2client"),
 		monzo_account_id: castId(result.monzo_account_id, "acc"),
 		monzo_pot_id: castId(result.monzo_pot_id, "pot"),
 	};
@@ -46,7 +45,7 @@ export async function withMonzoClient<T>(
 	}
 
 	const appCreds = {
-		client_id: config.client_id,
+		client_id: castId(env.MONZO_CLIENT_ID, "oauth2client"),
 		client_secret: env.MONZO_CLIENT_SECRET,
 		redirect_uri: "http://localhost", // Placeholder
 	};
@@ -67,7 +66,7 @@ export async function withMonzoClient<T>(
 		try {
 			const params = new URLSearchParams();
 			params.append("grant_type", "refresh_token");
-			params.append("client_id", config.client_id);
+			params.append("client_id", env.MONZO_CLIENT_ID);
 			params.append("client_secret", env.MONZO_CLIENT_SECRET);
 			params.append("refresh_token", config.refresh_token);
 
