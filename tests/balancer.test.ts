@@ -15,7 +15,6 @@ describe("balanceAccount", () => {
 		access_token: "test_token",
 		refresh_token: "test_refresh",
 		client_id: castId("oauth2client_123", "oauth2client"),
-		client_secret: "secret",
 		monzo_account_id: castId("acc_123", "acc"),
 		monzo_pot_id: castId("pot_456", "pot"),
 		target_balance: 1000, // £10.00

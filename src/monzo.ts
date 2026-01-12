@@ -47,7 +47,7 @@ export async function withMonzoClient<T>(
 
 	const appCreds = {
 		client_id: config.client_id,
-		client_secret: config.client_secret,
+		client_secret: env.MONZO_CLIENT_SECRET,
 		redirect_uri: "http://localhost", // Placeholder
 	};
 
@@ -68,7 +68,7 @@ export async function withMonzoClient<T>(
 			const params = new URLSearchParams();
 			params.append("grant_type", "refresh_token");
 			params.append("client_id", config.client_id);
-			params.append("client_secret", config.client_secret);
+			params.append("client_secret", env.MONZO_CLIENT_SECRET);
 			params.append("refresh_token", config.refresh_token);
 
 			const response = await fetch("https://api.monzo.com/oauth2/token", {

@@ -46,7 +46,6 @@ describe("Monzo Configuration", () => {
 			monzo_pot_id: "pot_123",
 			target_balance: 2000,
 			client_id: "oauth2client_123",
-			client_secret: "secret_123",
 			access_token: "access",
 			refresh_token: "refresh",
 		};
@@ -57,7 +56,6 @@ describe("Monzo Configuration", () => {
 		expect(config).not.toBeNull();
 		expect(config?.access_token).toBe("access");
 		expect(config?.target_balance).toBe(2000);
-		expect(config?.client_secret).toBe("secret_123");
 		expect(config?.monzo_account_id).toBe("acc_123");
 	});
 });

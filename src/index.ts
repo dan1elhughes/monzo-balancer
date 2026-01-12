@@ -276,14 +276,13 @@ async function finishSetup(
 
 	// Save to D1
 	const stmt = env.DB.prepare(
-		`INSERT OR REPLACE INTO accounts (monzo_account_id, monzo_pot_id, target_balance, client_id, client_secret, access_token, refresh_token, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO accounts (monzo_account_id, monzo_pot_id, target_balance, client_id, access_token, refresh_token, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 	).bind(
 		accountId,
 		potId,
 		parseInt(targetBalance, 10),
 		env.MONZO_CLIENT_ID,
-		env.MONZO_CLIENT_SECRET,
 		access_token,
 		refresh_token,
 		Date.now(),
