@@ -24,6 +24,10 @@ export default {
 			return handleSetupFinish(request, env);
 		}
 
+		if (url.pathname === "/setup/continue" && request.method === "POST") {
+			return handleSetupContinue(request, env);
+		}
+
 		if (url.pathname === "/" && request.method === "POST") {
 			return handleWebhook(request, env);
 		}
@@ -98,6 +102,29 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 	const tokenData = (await response.json()) as any;
 	const { access_token, refresh_token } = tokenData;
 
+	return renderAccountSelection(env, access_token, refresh_token);
+}
+
+async function handleSetupContinue(
+	request: Request,
+	env: Env,
+): Promise<Response> {
+	const formData = await request.formData();
+	const access_token = formData.get("access_token") as string;
+	const refresh_token = formData.get("refresh_token") as string;
+
+	if (!access_token || !refresh_token) {
+		return new Response("Missing tokens", { status: 400 });
+	}
+
+	return renderAccountSelection(env, access_token, refresh_token);
+}
+
+async function renderAccountSelection(
+	env: Env,
+	access_token: string,
+	refresh_token: string,
+): Promise<Response> {
 	const client = new MonzoAPI(
 		{ access_token, refresh_token },
 		{
@@ -122,7 +149,12 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
         <body>
           <h1>Action Required</h1>
           <p>Please check your Monzo app to approve access for this application.</p>
-          <p>Once approved, refresh this page.</p>
+          <p>Once approved, click the button below.</p>
+          <form action="/setup/continue" method="POST">
+            <input type="hidden" name="access_token" value="${access_token}" />
+            <input type="hidden" name="refresh_token" value="${refresh_token}" />
+            <button type="submit">I've Approved Access</button>
+          </form>
         </body>
       </html>
       `,
