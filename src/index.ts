@@ -20,6 +20,10 @@ export default {
 			return handleCallback(request, env);
 		}
 
+		if (url.pathname === "/setup/finish" && request.method === "POST") {
+			return handleSetupFinish(request, env);
+		}
+
 		if (url.pathname === "/" && request.method === "POST") {
 			return handleWebhook(request, env, ctx);
 		}
@@ -103,11 +107,97 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 		logger.info("Accounts fetched successfully", { count: accounts.length });
 	} catch (e) {
 		logger.error("Failed to fetch accounts", e);
+		// Return retry page
 		return new Response(
-			"Failed to fetch accounts from Monzo (403? Check App Approval)",
+			`
+      <html>
+        <body>
+          <h1>Action Required</h1>
+          <p>Please check your Monzo app to approve access for this application.</p>
+          <p>Once approved, click the button below to finish setup.</p>
+          <form action="/setup/finish" method="POST">
+            <input type="hidden" name="access_token" value="${access_token}" />
+            <input type="hidden" name="refresh_token" value="${refresh_token}" />
+            <input type="hidden" name="potName" value="${potName}" />
+            <input type="hidden" name="targetBalance" value="${targetBalance}" />
+            <button type="submit">Finish Setup</button>
+          </form>
+        </body>
+      </html>
+      `,
+			{
+				headers: { "Content-Type": "text/html" },
+			},
+		);
+	}
+
+	return await finishSetup(
+		env,
+		access_token,
+		refresh_token,
+		potName,
+		targetBalance,
+		request.url,
+		accounts,
+	);
+}
+
+async function handleSetupFinish(
+	request: Request,
+	env: Env,
+): Promise<Response> {
+	const formData = await request.formData();
+	const access_token = formData.get("access_token") as string;
+	const refresh_token = formData.get("refresh_token") as string;
+	const potName = formData.get("potName") as string;
+	const targetBalance = formData.get("targetBalance") as string;
+
+	const client = new MonzoAPI(
+		{ access_token, refresh_token },
+		{
+			client_id: castId(env.MONZO_CLIENT_ID, "oauth2client"),
+			client_secret: env.MONZO_CLIENT_SECRET,
+			redirect_uri: env.MONZO_REDIRECT_URI,
+		},
+	);
+
+	try {
+		const accounts = await client.getAccounts();
+		return await finishSetup(
+			env,
+			access_token,
+			refresh_token,
+			potName,
+			targetBalance,
+			request.url,
+			accounts,
+		);
+	} catch (e: any) {
+		logger.error("Failed to fetch accounts on retry", e);
+		return new Response(
+			`Failed to fetch accounts: ${e.message}. Please try refreshing or restarting the login flow.`,
 			{ status: 500 },
 		);
 	}
+}
+
+async function finishSetup(
+	env: Env,
+	access_token: string,
+	refresh_token: string,
+	potName: string,
+	targetBalance: string,
+	requestUrl: string,
+	accounts: any[],
+): Promise<Response> {
+	const client = new MonzoAPI(
+		{ access_token, refresh_token },
+		{
+			client_id: castId(env.MONZO_CLIENT_ID, "oauth2client"),
+			client_secret: env.MONZO_CLIENT_SECRET,
+			redirect_uri: env.MONZO_REDIRECT_URI,
+		},
+	);
 
 	const account = accounts.find((a) => a.type === "uk_retail");
 	if (!account) {
@@ -135,7 +225,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 	const potId = pot.id;
 
 	// Check for webhook and create if it doesn't exist
-	const workerUrl = new URL(request.url);
+	const workerUrl = new URL(requestUrl);
 	const webhookUrl = `${workerUrl.protocol}//${workerUrl.host}/`;
 
 	logger.info("Checking webhooks...");
