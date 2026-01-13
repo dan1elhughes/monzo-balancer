@@ -9,9 +9,17 @@ export async function balanceAccount(
 ) {
 	const { monzo_account_id, monzo_pot_id, target_balance } = config;
 
-	// 1. Get Balance
-	const balanceData = await client.getBalance(monzo_account_id);
+	// 1. Get Balance and Pots in parallel
+	const [balanceData, pots] = await Promise.all([
+		client.getBalance(monzo_account_id),
+		client.getPots(monzo_account_id),
+	]);
 	const currentBalance = balanceData.balance;
+	const targetPot = pots.find((p) => p.id === monzo_pot_id);
+
+	if (!targetPot) {
+		throw new Error(`Pot ${monzo_pot_id} not found`);
+	}
 
 	logger.info("Checking balance", {
 		currentBalance,
@@ -46,13 +54,6 @@ export async function balanceAccount(
 		});
 	} else {
 		// Deficit: Withdraw from Pot
-		const pots = await client.getPots(monzo_account_id);
-		const targetPot = pots.find((p) => p.id === monzo_pot_id);
-
-		if (!targetPot) {
-			throw new Error(`Pot ${monzo_pot_id} not found`);
-		}
-
 		const withdrawAmount = Math.abs(diff);
 		const available = targetPot.balance;
 

@@ -26,6 +26,9 @@ describe("balanceAccount", () => {
 
 	it("does nothing when balance equals target", async () => {
 		mockClient.getBalance.mockResolvedValue({ balance: 1000 });
+		mockClient.getPots.mockResolvedValue([
+			{ id: config.monzo_pot_id, balance: 0 },
+		]);
 
 		await balanceAccount(mockClient as any, config, "tx_123");
 
@@ -35,6 +38,9 @@ describe("balanceAccount", () => {
 
 	it("deposits excess funds into pot when balance > target", async () => {
 		mockClient.getBalance.mockResolvedValue({ balance: 1500 }); // £15.00
+		mockClient.getPots.mockResolvedValue([
+			{ id: config.monzo_pot_id, balance: 0 },
+		]);
 
 		await balanceAccount(mockClient as any, config, "tx_123");
 
@@ -94,6 +100,9 @@ describe("balanceAccount", () => {
 
 	it("uses deterministic dedupe_id when triggeringTransactionId is provided", async () => {
 		mockClient.getBalance.mockResolvedValue({ balance: 1500 });
+		mockClient.getPots.mockResolvedValue([
+			{ id: config.monzo_pot_id, balance: 0 },
+		]);
 		const txId = "tx_12345";
 
 		await balanceAccount(mockClient as any, config, txId);
@@ -108,6 +117,9 @@ describe("balanceAccount", () => {
 
 	it("skips deposit when dry_run is true", async () => {
 		mockClient.getBalance.mockResolvedValue({ balance: 1500 });
+		mockClient.getPots.mockResolvedValue([
+			{ id: config.monzo_pot_id, balance: 0 },
+		]);
 		const dryRunConfig = { ...config, dry_run: true };
 
 		await balanceAccount(mockClient as any, dryRunConfig, "tx_123");
