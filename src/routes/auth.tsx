@@ -104,6 +104,7 @@ async function renderAccountSelectionPage(
 			<ApprovalRequired
 				accessToken={accessToken}
 				refreshToken={refreshToken}
+				userId={userId}
 			/>,
 		);
 	}
