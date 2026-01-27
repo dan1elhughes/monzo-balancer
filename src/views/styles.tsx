@@ -1,3 +1,5 @@
+import { css, Style } from "hono/css";
+
 /**
  * Monzo Brand Colors
  * https://www.brandcolorcode.com/monzo
@@ -16,23 +18,26 @@ export const colors = {
 };
 
 /**
- * Global stylesheet for the application
+ * Global styles using Hono css helper
  */
-export const GlobalStyles = () => (
-	<style>{`
-* {
-	margin: 0;
-	padding: 0;
-	box-sizing: border-box;
-}
+export const globalStyles = css`
+	:-hono-global {
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
 
-html, body {
-	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
-	background-color: ${colors.lightGray};
-	color: ${colors.textDark};
-}
+		html,
+		body {
+			font-family:
+				-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+				Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+			-webkit-font-smoothing: antialiased;
+			-moz-osx-font-smoothing: grayscale;
+			background-color: ${colors.lightGray};
+			color: ${colors.textDark};
+		}
 
 		body {
 			min-height: 100vh;
@@ -182,7 +187,7 @@ html, body {
 		}
 
 		.info-box {
-			background-color: #E3F2FD;
+			background-color: #e3f2fd;
 			border-left: 4px solid ${colors.blueGreen};
 			padding: 1rem;
 			border-radius: 4px;
@@ -201,8 +206,17 @@ html, body {
 			color: ${colors.darkGray};
 			border-top: 1px solid ${colors.mediumGray};
 			padding-top: 1rem;
+		}
 	}
-`}</style>
+`;
+
+/**
+ * Global styles component for <head>
+ */
+export const GlobalStyles = () => (
+	<>
+		<Style>{globalStyles}</Style>
+	</>
 );
 
 /**
