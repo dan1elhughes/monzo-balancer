@@ -4,6 +4,9 @@ export function renderApprovalRequired(
 ): string {
 	return `
       <html>
+        <head>
+          <meta charset="utf-8" />
+        </head>
         <body>
           <h1>Action Required</h1>
           <p>Please check your Monzo app to approve access for this application.</p>

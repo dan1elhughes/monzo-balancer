@@ -90,13 +90,13 @@ async function renderAccountSelectionPage(
 		});
 
 		return new Response(html, {
-			headers: { "Content-Type": "text/html" },
+			headers: { "Content-Type": "text/html; charset=utf-8" },
 		});
 	} catch (e) {
 		logger.error("Failed to render account selection", e);
 		const html = renderApprovalRequired(accessToken, refreshToken);
 		return new Response(html, {
-			headers: { "Content-Type": "text/html" },
+			headers: { "Content-Type": "text/html; charset=utf-8" },
 		});
 	}
 }

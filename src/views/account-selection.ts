@@ -31,6 +31,7 @@ export function renderAccountSelection(input: {
 	return `
     <html>
       <head>
+        <meta charset="utf-8" />
         <title>Monzo Balancer Setup</title>
         <style>
           body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
