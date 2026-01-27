@@ -7,10 +7,9 @@ import {
 	exchangeCodeForTokens,
 } from "../services/oauth.service";
 import { fetchAccountsWithData } from "../services/account-selection";
-import { renderApprovalRequired } from "../views/approval-required";
-import { renderAccountSelection } from "../views/account-selection";
+import { ApprovalRequired } from "../views/approval-required";
+import { AccountSelection } from "../views/account-selection";
 import { createMonzoClient } from "../services/monzo";
-import { castId } from "@otters/monzo";
 import { logger } from "../logger";
 
 export function registerAuthRoutes(app: Hono<{ Bindings: Env }>): void {
@@ -61,7 +60,7 @@ async function handleCallback(
 			env.MONZO_REDIRECT_URI,
 		);
 
-		return renderAccountSelectionPage(env, access_token, refresh_token);
+		return renderAccountSelectionPage(c, env, access_token, refresh_token);
 	} catch (e) {
 		logger.error("OAuth callback failed", e);
 		return c.text("OAuth callback failed", 500);
@@ -69,6 +68,7 @@ async function handleCallback(
 }
 
 async function renderAccountSelectionPage(
+	c: Context<{ Bindings: Env }>,
 	env: Env,
 	accessToken: string,
 	refreshToken: string,
@@ -78,20 +78,20 @@ async function renderAccountSelectionPage(
 
 		const accounts = await fetchAccountsWithData(client);
 
-		const html = renderAccountSelection({
-			accessToken,
-			refreshToken,
-			accounts,
-		});
-
-		return new Response(html, {
-			headers: { "Content-Type": "text/html; charset=utf-8" },
-		});
+		return c.html(
+			<AccountSelection
+				accessToken={accessToken}
+				refreshToken={refreshToken}
+				accounts={accounts}
+			/>,
+		);
 	} catch (e) {
 		logger.error("Failed to render account selection", e);
-		const html = renderApprovalRequired(accessToken, refreshToken);
-		return new Response(html, {
-			headers: { "Content-Type": "text/html; charset=utf-8" },
-		});
+		return c.html(
+			<ApprovalRequired
+				accessToken={accessToken}
+				refreshToken={refreshToken}
+			/>,
+		);
 	}
 }

@@ -2,9 +2,9 @@ import { Context, Hono } from "hono";
 import { Env } from "../types";
 import { fetchAccountsWithData } from "../services/account-selection";
 import { registerWebhookIfNeeded } from "../services/webhook-registration";
-import { renderApprovalRequired } from "../views/approval-required";
-import { renderAccountSelection } from "../views/account-selection";
-import { renderSetupComplete } from "../views/setup-complete";
+import { ApprovalRequired } from "../views/approval-required";
+import { AccountSelection } from "../views/account-selection";
+import { SetupComplete } from "../views/setup-complete";
 import { createMonzoClient } from "../services/monzo";
 import { logger } from "../logger";
 
@@ -24,7 +24,7 @@ async function handleSetupContinue(
 		return c.text("Missing tokens", 400);
 	}
 
-	return renderAccountSelectionPage(c.env, accessToken, refreshToken);
+	return renderAccountSelectionPage(c, c.env, accessToken, refreshToken);
 }
 
 async function handleSetupFinish(
@@ -65,8 +65,7 @@ async function handleSetupFinish(
 		);
 		await stmt.run();
 
-		const html = renderSetupComplete();
-		return c.text(html);
+		return c.html(<SetupComplete />);
 	} catch (e) {
 		logger.error("Setup finish failed", e);
 		return c.text("Setup failed", 500);
@@ -74,6 +73,7 @@ async function handleSetupFinish(
 }
 
 async function renderAccountSelectionPage(
+	c: Context<{ Bindings: Env }>,
 	env: Env,
 	accessToken: string,
 	refreshToken: string,
@@ -83,20 +83,20 @@ async function renderAccountSelectionPage(
 
 		const accounts = await fetchAccountsWithData(client);
 
-		const html = renderAccountSelection({
-			accessToken,
-			refreshToken,
-			accounts,
-		});
-
-		return new Response(html, {
-			headers: { "Content-Type": "text/html; charset=utf-8" },
-		});
+		return c.html(
+			<AccountSelection
+				accessToken={accessToken}
+				refreshToken={refreshToken}
+				accounts={accounts}
+			/>,
+		);
 	} catch (e) {
 		logger.error("Failed to render account selection", e);
-		const html = renderApprovalRequired(accessToken, refreshToken);
-		return new Response(html, {
-			headers: { "Content-Type": "text/html; charset=utf-8" },
-		});
+		return c.html(
+			<ApprovalRequired
+				accessToken={accessToken}
+				refreshToken={refreshToken}
+			/>,
+		);
 	}
 }
