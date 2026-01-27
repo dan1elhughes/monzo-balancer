@@ -2,6 +2,10 @@ import { MonzoAPI, castId, Id } from "@otters/monzo";
 import { Env, AccountConfig } from "./types";
 import { logger } from "./logger";
 
+/**
+ * Internal: Fetch Monzo configuration from database
+ * @internal
+ */
 export async function getMonzoConfig(
 	env: Env,
 	accountId: Id<"acc">,
@@ -23,6 +27,10 @@ export async function getMonzoConfig(
 	};
 }
 
+/**
+ * Internal: Save refreshed tokens to database
+ * @internal
+ */
 export async function saveTokens(
 	env: Env,
 	accountId: Id<"acc">,
@@ -33,6 +41,21 @@ export async function saveTokens(
 		"UPDATE accounts SET access_token = ?, refresh_token = ?, updated_at = ? WHERE monzo_account_id = ?",
 	).bind(accessToken, refreshToken, Date.now(), accountId);
 	await stmt.run();
+}
+
+export function createMonzoClient(
+	env: Env,
+	accessToken: string,
+	refreshToken: string,
+): MonzoAPI {
+	return new MonzoAPI(
+		{ access_token: accessToken, refresh_token: refreshToken },
+		{
+			client_id: castId(env.MONZO_CLIENT_ID, "oauth2client"),
+			client_secret: env.MONZO_CLIENT_SECRET,
+			redirect_uri: env.MONZO_REDIRECT_URI,
+		},
+	);
 }
 
 export async function withMonzoClient<T>(

@@ -9,7 +9,7 @@ import { registerWebhookIfNeeded } from "../services/webhook-registration";
 import { renderApprovalRequired } from "../views/approval-required";
 import { renderAccountSelection } from "../views/account-selection";
 import { renderSetupComplete } from "../views/setup-complete";
-import { MonzoAPI, castId } from "@otters/monzo";
+import { createMonzoClient } from "../monzo";
 import { logger } from "../logger";
 
 export function registerSetupRoutes(app: Hono<{ Bindings: Env }>): void {
@@ -83,14 +83,7 @@ async function renderAccountSelectionPage(
 	refreshToken: string,
 ): Promise<Response> {
 	try {
-		const client = new MonzoAPI(
-			{ access_token: accessToken, refresh_token: refreshToken },
-			{
-				client_id: castId(env.MONZO_CLIENT_ID, "oauth2client"),
-				client_secret: env.MONZO_CLIENT_SECRET,
-				redirect_uri: env.MONZO_REDIRECT_URI,
-			},
-		);
+		const client = createMonzoClient(env, accessToken, refreshToken);
 
 		const accounts = await fetchAccountsWithData(client);
 		const accountsHtml = buildAccountsHtml(accounts);
