@@ -35,16 +35,21 @@ describe("Monzo Configuration", () => {
 		const config = await getMonzoConfig(mockEnv, accountId);
 		expect(config).toBeNull();
 		expect(mockDB.prepare).toHaveBeenCalledWith(
-			"SELECT * FROM monzo_accounts WHERE monzo_account_id = ?",
+			expect.stringContaining("JOIN users u ON ma.user_id = u.user_id"),
 		);
 		expect(mockStmt.bind).toHaveBeenCalledWith(accountId);
 	});
 
-	it("returns config object when account exists", async () => {
+	it("returns config object with tokens when account exists", async () => {
 		const mockAccount = {
+			id: "uuid_123",
+			user_id: "user_123",
 			monzo_account_id: "acc_123",
 			monzo_pot_id: "pot_123",
 			target_balance: 2000,
+			dry_run: 0,
+			created_at: 1234567890,
+			updated_at: 1234567890,
 			access_token: "access",
 			refresh_token: "refresh",
 		};
@@ -54,8 +59,10 @@ describe("Monzo Configuration", () => {
 
 		expect(config).not.toBeNull();
 		expect(config?.access_token).toBe("access");
+		expect(config?.refresh_token).toBe("refresh");
 		expect(config?.target_balance).toBe(2000);
 		expect(config?.monzo_account_id).toBe("acc_123");
+		expect(config?.user_id).toBe("user_123");
 	});
 });
 
@@ -76,7 +83,7 @@ describe("saveTokens", () => {
 		MONZO_REDIRECT_URI: "http://localhost",
 	};
 
-	const accountId = castId("acc_123", "acc");
+	const userId = "user_123";
 
 	beforeEach(() => {
 		vi.resetAllMocks();
@@ -84,17 +91,17 @@ describe("saveTokens", () => {
 		mockStmt.bind.mockReturnThis();
 	});
 
-	it("saves access and refresh tokens to DB", async () => {
-		await saveTokens(mockEnv, accountId, "new_access", "new_refresh");
+	it("saves access and refresh tokens to user in DB", async () => {
+		await saveTokens(mockEnv, userId, "new_access", "new_refresh");
 
 		expect(mockDB.prepare).toHaveBeenCalledWith(
-			"UPDATE monzo_accounts SET access_token = ?, refresh_token = ?, updated_at = ? WHERE monzo_account_id = ?",
+			"UPDATE users SET access_token = ?, refresh_token = ?, updated_at = ? WHERE user_id = ?",
 		);
 		expect(mockStmt.bind).toHaveBeenCalledWith(
 			"new_access",
 			"new_refresh",
 			expect.any(Number),
-			accountId,
+			userId,
 		);
 		expect(mockStmt.run).toHaveBeenCalled();
 	});

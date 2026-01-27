@@ -61,9 +61,14 @@ async function handleCallback(
 			env.MONZO_REDIRECT_URI,
 		);
 
-		// Create or retrieve user from database
+		// Create or retrieve user from database with tokens stored at user level
 		const client = createMonzoClient(env, access_token, refresh_token);
-		const user = await getOrCreateUser(env, client);
+		const user = await getOrCreateUser(
+			env,
+			client,
+			access_token,
+			refresh_token,
+		);
 
 		return renderAccountSelectionPage(
 			c,

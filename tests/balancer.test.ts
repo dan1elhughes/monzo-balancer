@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { balanceAccount } from "../src/balancer";
-import { AccountConfig } from "../src/types";
+import { MonzoAccountConfig } from "../src/types";
 import { castId } from "@otters/monzo";
 
 describe("balanceAccount", () => {
@@ -11,9 +11,9 @@ describe("balanceAccount", () => {
 		withdrawFromPot: vi.fn(),
 	};
 
-	const config: AccountConfig = {
-		access_token: "test_token",
-		refresh_token: "test_refresh",
+	const config: MonzoAccountConfig = {
+		id: "uuid_123",
+		user_id: "user_123",
 		monzo_account_id: castId("acc_123", "acc"),
 		monzo_pot_id: castId("pot_456", "pot"),
 		target_balance: 1000, // £10.00

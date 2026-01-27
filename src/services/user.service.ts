@@ -5,16 +5,20 @@ import { logger } from "../logger";
 /**
  * Get or create a user based on Monzo API user information.
  * Fetches the authenticated user's info from Monzo `/me` endpoint
- * and creates a user record if one doesn't exist.
+ * and creates or updates a user record with tokens.
  *
  * @param env - Environment with database access
  * @param client - Authenticated Monzo API client
- * @returns User object with user_id and timestamps
+ * @param accessToken - OAuth access token for the user
+ * @param refreshToken - OAuth refresh token for the user
+ * @returns User object with user_id, tokens, and timestamps
  * @throws Error if unable to fetch user info or create user record
  */
 export async function getOrCreateUser(
 	env: Env,
 	client: MonzoAPI,
+	accessToken: string,
+	refreshToken: string,
 ): Promise<User> {
 	try {
 		// Fetch user info from Monzo API using whoami() endpoint
@@ -36,24 +40,40 @@ export async function getOrCreateUser(
 			.first<User>();
 
 		if (existingUser) {
-			logger.info("User already exists in database", {
+			// Update existing user with new tokens
+			const now = Date.now();
+			await env.DB.prepare(
+				"UPDATE users SET access_token = ?, refresh_token = ?, updated_at = ? WHERE user_id = ?",
+			)
+				.bind(accessToken, refreshToken, now, monzoUserId)
+				.run();
+
+			logger.info("Updated existing user in database", {
 				user_id: monzoUserId,
 			});
-			return existingUser;
+
+			return {
+				...existingUser,
+				access_token: accessToken,
+				refresh_token: refreshToken,
+				updated_at: now,
+			};
 		}
 
-		// Create new user
+		// Create new user with tokens
 		const now = Date.now();
 		const newUser: User = {
 			user_id: monzoUserId,
+			access_token: accessToken,
+			refresh_token: refreshToken,
 			created_at: now,
 			updated_at: now,
 		};
 
 		await env.DB.prepare(
-			"INSERT INTO users (user_id, created_at, updated_at) VALUES (?, ?, ?)",
+			"INSERT INTO users (user_id, access_token, refresh_token, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
 		)
-			.bind(monzoUserId, now, now)
+			.bind(monzoUserId, accessToken, refreshToken, now, now)
 			.run();
 
 		logger.info("Created new user in database", { user_id: monzoUserId });
@@ -99,10 +119,11 @@ export async function getUserMonzoAccounts(
 /**
  * Create a new Monzo account configuration for a user.
  * Used during setup to link a Monzo account to a user.
+ * Tokens are stored at the user level, not the account level.
  *
  * @param env - Environment with database access
  * @param userId - The user_id to associate this account with
- * @param monzoAccountData - The account configuration data
+ * @param monzoAccountData - The account configuration data (no tokens)
  * @returns The created MonzoAccount object
  */
 export async function createMonzoAccountForUser(
@@ -112,8 +133,6 @@ export async function createMonzoAccountForUser(
 		monzo_account_id: string;
 		monzo_pot_id: string;
 		target_balance: number;
-		access_token: string;
-		refresh_token: string;
 		dry_run: boolean;
 	},
 ): Promise<MonzoAccount> {
@@ -126,8 +145,6 @@ export async function createMonzoAccountForUser(
 		monzo_account_id: monzoAccountData.monzo_account_id as any,
 		monzo_pot_id: monzoAccountData.monzo_pot_id as any,
 		target_balance: monzoAccountData.target_balance,
-		access_token: monzoAccountData.access_token,
-		refresh_token: monzoAccountData.refresh_token,
 		dry_run: monzoAccountData.dry_run,
 		created_at: now,
 		updated_at: now,
@@ -136,8 +153,8 @@ export async function createMonzoAccountForUser(
 	try {
 		await env.DB.prepare(
 			`INSERT INTO monzo_accounts 
-			 (id, user_id, monzo_account_id, monzo_pot_id, target_balance, access_token, refresh_token, dry_run, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 (id, user_id, monzo_account_id, monzo_pot_id, target_balance, dry_run, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		)
 			.bind(
 				id,
@@ -145,8 +162,6 @@ export async function createMonzoAccountForUser(
 				monzoAccountData.monzo_account_id,
 				monzoAccountData.monzo_pot_id,
 				monzoAccountData.target_balance,
-				monzoAccountData.access_token,
-				monzoAccountData.refresh_token,
 				monzoAccountData.dry_run ? 1 : 0,
 				now,
 				now,

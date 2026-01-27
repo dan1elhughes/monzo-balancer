@@ -10,26 +10,28 @@ export interface Env {
 /**
  * User identity independent of Monzo account configuration.
  * Enables users to connect multiple Monzo accounts and maintain persistent identity.
+ * Tokens are stored at user level (not account level) per Monzo API design.
  */
 export interface User {
 	user_id: string;
+	access_token: string;
+	refresh_token: string;
 	created_at: number;
 	updated_at: number;
 }
 
 /**
  * Monzo account configuration stored in database.
- * Includes authentication tokens and balancing settings.
+ * Includes balancing settings and references the user for authentication tokens.
+ * Tokens are stored at user level, not account level (per Monzo API design).
  * Linked to a user via user_id.
  */
 export interface MonzoAccount {
 	id: string; // Internal UUID, unique per row
-	user_id: string; // Links to users.user_id
+	user_id: string; // Links to users.user_id (which has the tokens)
 	monzo_account_id: Id<"acc">;
 	monzo_pot_id: Id<"pot">;
 	target_balance: number; // in pennies
-	access_token: string;
-	refresh_token: string;
 	dry_run: boolean;
 	created_at: number;
 	updated_at: number;
@@ -43,19 +45,6 @@ export interface MonzoAccount {
 export interface MonzoAccountConfig {
 	id: string;
 	user_id: string;
-	monzo_account_id: Id<"acc">;
-	monzo_pot_id: Id<"pot">;
-	target_balance: number; // in pennies
-	dry_run: boolean;
-}
-
-/**
- * @deprecated Use MonzoAccountConfig instead
- * Kept for backward compatibility during migration
- */
-export interface AccountConfig {
-	access_token: string;
-	refresh_token: string;
 	monzo_account_id: Id<"acc">;
 	monzo_pot_id: Id<"pot">;
 	target_balance: number; // in pennies

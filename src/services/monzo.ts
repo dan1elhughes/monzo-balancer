@@ -9,11 +9,18 @@ import { logger } from "../logger";
 export async function getMonzoConfig(
 	env: Env,
 	accountId: Id<"acc">,
-): Promise<MonzoAccount | null> {
+): Promise<
+	(MonzoAccount & { access_token: string; refresh_token: string }) | null
+> {
 	const stmt = env.DB.prepare(
-		"SELECT * FROM monzo_accounts WHERE monzo_account_id = ?",
+		`SELECT ma.*, u.access_token, u.refresh_token 
+		 FROM monzo_accounts ma
+		 JOIN users u ON ma.user_id = u.user_id
+		 WHERE ma.monzo_account_id = ?`,
 	).bind(accountId);
-	const result = await stmt.first<MonzoAccount>();
+	const result = await stmt.first<
+		MonzoAccount & { access_token: string; refresh_token: string }
+	>();
 
 	if (!result) {
 		return null;
@@ -28,18 +35,18 @@ export async function getMonzoConfig(
 }
 
 /**
- * Internal: Save refreshed tokens to database
+ * Internal: Save refreshed tokens to database (user level)
  * @internal
  */
 export async function saveTokens(
 	env: Env,
-	accountId: Id<"acc">,
+	userId: string,
 	accessToken: string,
 	refreshToken: string,
 ) {
 	const stmt = env.DB.prepare(
-		"UPDATE monzo_accounts SET access_token = ?, refresh_token = ?, updated_at = ? WHERE monzo_account_id = ?",
-	).bind(accessToken, refreshToken, Date.now(), accountId);
+		"UPDATE users SET access_token = ?, refresh_token = ?, updated_at = ? WHERE user_id = ?",
+	).bind(accessToken, refreshToken, Date.now(), userId);
 	await stmt.run();
 }
 
@@ -132,7 +139,7 @@ export async function withMonzoClient<T>(
 
 			await saveTokens(
 				env,
-				accountId,
+				configData.user_id,
 				newCreds.access_token,
 				newCreds.refresh_token,
 			);

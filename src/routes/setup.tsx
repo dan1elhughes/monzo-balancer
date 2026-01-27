@@ -65,14 +65,12 @@ async function handleSetupFinish(
 		const webhookUrl = `${new URL(c.req.url).origin}/`;
 		await registerWebhookIfNeeded(accountId, webhookUrl, accessToken);
 
-		// Create Monzo account for user
+		// Create Monzo account for user (tokens are already stored at user level)
 		const targetBalancePennies = Math.round(parseFloat(targetBalance) * 100);
 		await createMonzoAccountForUser(env, userId, {
 			monzo_account_id: accountId,
 			monzo_pot_id: potId,
 			target_balance: targetBalancePennies,
-			access_token: accessToken,
-			refresh_token: refreshToken,
 			dry_run: dryRun,
 		});
 
@@ -109,6 +107,7 @@ async function renderAccountSelectionPage(
 			<ApprovalRequired
 				accessToken={accessToken}
 				refreshToken={refreshToken}
+				userId={userId}
 			/>,
 		);
 	}
