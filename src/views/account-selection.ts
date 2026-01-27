@@ -1,13 +1,11 @@
 import { AccountWithData } from "../services/account-selection";
 import { Models } from "@otters/monzo";
 
-export interface AccountSelectionInput {
+export function renderAccountSelection(input: {
 	accessToken: string;
 	refreshToken: string;
 	accounts: AccountWithData[];
-}
-
-export function renderAccountSelection(input: AccountSelectionInput): string {
+}): string {
 	const { accessToken, refreshToken, accounts } = input;
 
 	// Build accounts HTML
