@@ -18,8 +18,10 @@ export const colors = {
 /**
  * Global stylesheet for the application
  */
-export const GlobalStyles = () => (
-	<style>{`
+export const GlobalStyles = () => {
+	const fontStack = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif`;
+	return (
+		<style>{`
 		* {
 			margin: 0;
 			padding: 0;
@@ -27,9 +29,7 @@ export const GlobalStyles = () => (
 		}
 
 		html, body {
-			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-				'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-				sans-serif;
+			font-family: ${fontStack};
 			-webkit-font-smoothing: antialiased;
 			-moz-osx-font-smoothing: grayscale;
 			background-color: ${colors.lightGray};
@@ -205,7 +205,8 @@ export const GlobalStyles = () => (
 			padding-top: 1rem;
 		}
 	`}</style>
-);
+	);
+};
 
 /**
  * Layout component wrapping content
