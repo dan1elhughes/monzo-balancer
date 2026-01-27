@@ -1,10 +1,6 @@
 import { Context, Hono } from "hono";
 import { Env } from "../types";
-import {
-	fetchAccountsWithData,
-	buildAccountsHtml,
-	buildPotsHtml,
-} from "../services/account-selection";
+import { fetchAccountsWithData } from "../services/account-selection";
 import { registerWebhookIfNeeded } from "../services/webhook-registration";
 import { renderApprovalRequired } from "../views/approval-required";
 import { renderAccountSelection } from "../views/account-selection";
@@ -86,14 +82,11 @@ async function renderAccountSelectionPage(
 		const client = createMonzoClient(env, accessToken, refreshToken);
 
 		const accounts = await fetchAccountsWithData(client);
-		const accountsHtml = buildAccountsHtml(accounts);
-		const potsHtml = buildPotsHtml(accounts);
 
 		const html = renderAccountSelection({
 			accessToken,
 			refreshToken,
-			accountsHtml,
-			potsHtml,
+			accounts,
 		});
 
 		return new Response(html, {

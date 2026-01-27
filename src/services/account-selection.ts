@@ -43,25 +43,3 @@ export async function fetchAccountsWithData(
 
 	return accountsWithData;
 }
-
-export function buildAccountsHtml(accounts: AccountWithData[]): string {
-	return accounts
-		.map((acc) => {
-			const balance = (acc.balance.balance / 100).toFixed(2);
-			return `<option value="${acc.id}">${acc.description} (${acc.type}, £${balance})</option>`;
-		})
-		.join("");
-}
-
-export function buildPotsHtml(accounts: AccountWithData[]): string {
-	return accounts
-		.flatMap((acc) =>
-			acc.pots
-				.filter((pot: any) => !pot.deleted)
-				.map((pot: any) => {
-					const balance = (pot.balance / 100).toFixed(2);
-					return `<option value="${pot.id}">${pot.name} (${acc.description}, £${balance})</option>`;
-				}),
-		)
-		.join("");
-}

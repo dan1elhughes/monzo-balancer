@@ -1,12 +1,34 @@
+import { AccountWithData } from "../services/account-selection";
+
 export interface AccountSelectionInput {
 	accessToken: string;
 	refreshToken: string;
-	accountsHtml: string;
-	potsHtml: string;
+	accounts: AccountWithData[];
 }
 
 export function renderAccountSelection(input: AccountSelectionInput): string {
-	const { accessToken, refreshToken, accountsHtml, potsHtml } = input;
+	const { accessToken, refreshToken, accounts } = input;
+
+	// Build accounts HTML
+	const accountsHtml = accounts
+		.map((acc) => {
+			const balance = (acc.balance.balance / 100).toFixed(2);
+			return `<option value="${acc.id}">${acc.description} (${acc.type}, £${balance})</option>`;
+		})
+		.join("");
+
+	// Build pots HTML
+	const potsHtml = accounts
+		.flatMap((acc) =>
+			acc.pots
+				.filter((pot: any) => !pot.deleted)
+				.map((pot: any) => {
+					const balance = (pot.balance / 100).toFixed(2);
+					return `<option value="${pot.id}">${pot.name} (${acc.description}, £${balance})</option>`;
+				}),
+		)
+		.join("");
+
 	return `
     <html>
       <head>

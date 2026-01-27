@@ -6,11 +6,7 @@ import {
 	validateOAuthState,
 	exchangeCodeForTokens,
 } from "../services/oauth.service";
-import {
-	fetchAccountsWithData,
-	buildAccountsHtml,
-	buildPotsHtml,
-} from "../services/account-selection";
+import { fetchAccountsWithData } from "../services/account-selection";
 import { renderApprovalRequired } from "../views/approval-required";
 import { renderAccountSelection } from "../views/account-selection";
 import { createMonzoClient } from "../services/monzo";
@@ -81,14 +77,11 @@ async function renderAccountSelectionPage(
 		const client = createMonzoClient(env, accessToken, refreshToken);
 
 		const accounts = await fetchAccountsWithData(client);
-		const accountsHtml = buildAccountsHtml(accounts);
-		const potsHtml = buildPotsHtml(accounts);
 
 		const html = renderAccountSelection({
 			accessToken,
 			refreshToken,
-			accountsHtml,
-			potsHtml,
+			accounts,
 		});
 
 		return new Response(html, {
