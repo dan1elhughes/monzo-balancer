@@ -84,8 +84,11 @@ export async function withMonzoClient<T>(
 
 	try {
 		return await action(client, config);
-	} catch (error: any) {
-		logger.warn("Monzo API call failed, attempting refresh", error);
+	} catch (error: unknown) {
+		logger.warn(
+			"Monzo API call failed, attempting refresh",
+			error as Record<string, unknown>,
+		);
 
 		try {
 			const params = new URLSearchParams();
@@ -109,7 +112,10 @@ export async function withMonzoClient<T>(
 				);
 			}
 
-			const newCreds = (await response.json()) as any;
+			const newCreds = (await response.json()) as {
+				access_token: string;
+				refresh_token: string;
+			};
 			logger.info("Token refreshed successfully");
 
 			await saveTokens(
@@ -120,20 +126,35 @@ export async function withMonzoClient<T>(
 			);
 
 			const refreshedClient = new MonzoAPI(newCreds, appCreds);
-			const newConfig = { ...config, ...newCreds };
+			const newConfig = {
+				...config,
+				access_token: newCreds.access_token,
+				refresh_token: newCreds.refresh_token,
+			};
 
 			return await action(refreshedClient, newConfig);
-		} catch (refreshError: any) {
-			logger.error("Failed to refresh token", refreshError);
-			if (refreshError.response) {
+		} catch (refreshError: unknown) {
+			logger.error(
+				"Failed to refresh token",
+				refreshError as Record<string, unknown>,
+			);
+			if (
+				typeof refreshError === "object" &&
+				refreshError !== null &&
+				"response" in refreshError
+			) {
 				try {
-					const body = await refreshError.response.clone().text();
+					const response = (refreshError as { response: Response }).response;
+					const body = await response.clone().text();
 					logger.error("Refresh error response", {
-						status: refreshError.response.status,
+						status: response.status,
 						body,
 					});
 				} catch (e) {
-					logger.error("Failed to read refresh error response body", e);
+					logger.error(
+						"Failed to read refresh error response body",
+						e as Record<string, unknown>,
+					);
 				}
 			}
 			throw refreshError;

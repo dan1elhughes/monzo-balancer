@@ -70,7 +70,10 @@ export async function exchangeCodeForTokens(
 		throw new Error(`Failed to exchange token: ${text}`);
 	}
 
-	const tokenData = (await response.json()) as any;
+	const tokenData = (await response.json()) as {
+		access_token: string;
+		refresh_token: string;
+	};
 	return {
 		access_token: tokenData.access_token,
 		refresh_token: tokenData.refresh_token,

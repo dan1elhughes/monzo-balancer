@@ -1,4 +1,5 @@
 import { AccountWithData } from "../services/account-selection";
+import { Models } from "@otters/monzo";
 
 export interface AccountSelectionInput {
 	accessToken: string;
@@ -21,8 +22,8 @@ export function renderAccountSelection(input: AccountSelectionInput): string {
 	const potsHtml = accounts
 		.flatMap((acc) =>
 			acc.pots
-				.filter((pot: any) => !pot.deleted)
-				.map((pot: any) => {
+				.filter((pot) => !pot.deleted)
+				.map((pot) => {
 					const balance = (pot.balance / 100).toFixed(2);
 					return `<option value="${pot.id}">${pot.name} (${acc.description}, £${balance})</option>`;
 				}),
