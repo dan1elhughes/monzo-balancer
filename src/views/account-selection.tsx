@@ -1,5 +1,6 @@
 import type { FC } from "hono/jsx";
 import { AccountWithData } from "../services/account-selection";
+import { Layout } from "./styles";
 
 interface AccountSelectionProps {
 	accessToken: string;
@@ -32,51 +33,45 @@ const AccountSelection: FC<AccountSelectionProps> = (props) => {
 	const { accessToken, refreshToken, accounts } = props;
 
 	return (
-		<html>
-			<head>
-				<meta charset="utf-8" />
-				<title>Monzo Balancer Setup</title>
-				<style>{`
-          body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
-          .form-group { margin-bottom: 1rem; }
-          label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
-          select, input { width: 100%; padding: 0.5rem; font-size: 1rem; }
-          button { padding: 0.75rem 1.5rem; background: #2D3E50; color: white; border: none; font-size: 1rem; cursor: pointer; }
-        `}</style>
-			</head>
-			<body>
-				<h1>Configure Monzo Balancer</h1>
-				<form action="/setup/finish" method="post">
-					<input type="hidden" name="access_token" value={accessToken} />
-					<input type="hidden" name="refresh_token" value={refreshToken} />
+		<Layout title="Monzo Balancer - Configure">
+			<h1>Configure Monzo Balancer</h1>
+			<p class="subtitle">Set up your account balancing preferences</p>
 
-					<div class="form-group">
-						<label for="accountId">Select Account</label>
-						<select name="accountId" id="accountId" required>
-							{accounts.map((account) => (
-								<AccountOption account={account} />
-							))}
-						</select>
-					</div>
+			<form action="/setup/finish" method="post">
+				<input type="hidden" name="access_token" value={accessToken} />
+				<input type="hidden" name="refresh_token" value={refreshToken} />
 
-					<div class="form-group">
-						<label for="potId">Select Pot</label>
-						<select name="potId" id="potId" required>
-							{accounts.flatMap((account) =>
-								account.pots
-									.filter((pot) => !pot.deleted)
-									.map((pot) => (
-										<PotOption
-											pot={pot}
-											accountDescription={account.description}
-										/>
-									)),
-							)}
-						</select>
-					</div>
+				<div class="form-group">
+					<label for="accountId">Select Account</label>
+					<select name="accountId" id="accountId" required>
+						<option value="">Choose an account...</option>
+						{accounts.map((account) => (
+							<AccountOption account={account} />
+						))}
+					</select>
+				</div>
 
-					<div class="form-group">
-						<label for="targetBalance">Target Balance (£)</label>
+				<div class="form-group">
+					<label for="potId">Select Savings Pot</label>
+					<select name="potId" id="potId" required>
+						<option value="">Choose a pot...</option>
+						{accounts.flatMap((account) =>
+							account.pots
+								.filter((pot) => !pot.deleted)
+								.map((pot) => (
+									<PotOption
+										pot={pot}
+										accountDescription={account.description}
+									/>
+								)),
+						)}
+					</select>
+				</div>
+
+				<div class="form-group">
+					<label for="targetBalance">Target Balance</label>
+					<div style="display: flex; align-items: center; gap: 0.5rem;">
+						<span style="font-size: 1.25rem; color: #007A8B;">£</span>
 						<input
 							type="number"
 							name="targetBalance"
@@ -84,27 +79,30 @@ const AccountSelection: FC<AccountSelectionProps> = (props) => {
 							required
 							min="0"
 							step="0.01"
-							placeholder="e.g. 10.00"
+							placeholder="0.00"
+							style="flex: 1;"
 						/>
 					</div>
+				</div>
 
-					<div class="form-group">
-						<label style="font-weight: normal; display: flex; align-items: center; gap: 0.5rem;">
-							<input
-								type="checkbox"
-								name="dryRun"
-								id="dryRun"
-								value="true"
-								style="width: auto;"
-							/>
-							<span>Dry Run Mode (Simulate only - no money moved)</span>
+				<div class="form-group">
+					<div class="checkbox-group">
+						<input type="checkbox" name="dryRun" id="dryRun" value="true" />
+						<label for="dryRun">
+							<strong>Dry Run Mode</strong>
+							<br />
+							<span style="font-size: 0.875rem; font-weight: normal;">
+								Test without moving money
+							</span>
 						</label>
 					</div>
+				</div>
 
-					<button type="submit">Save Configuration</button>
-				</form>
-			</body>
-		</html>
+				<button type="submit" class="btn-primary" style="margin-top: 1.5rem;">
+					Save Configuration
+				</button>
+			</form>
+		</Layout>
 	);
 };
 
