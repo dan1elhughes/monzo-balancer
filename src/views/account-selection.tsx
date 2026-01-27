@@ -5,6 +5,7 @@ import { Layout } from "./styles";
 interface AccountSelectionProps {
 	accessToken: string;
 	refreshToken: string;
+	userId: string;
 	accounts: AccountWithData[];
 }
 
@@ -30,7 +31,7 @@ const PotOption: FC<{ pot: any; accountDescription: string }> = ({
 };
 
 const AccountSelection: FC<AccountSelectionProps> = (props) => {
-	const { accessToken, refreshToken, accounts } = props;
+	const { accessToken, refreshToken, userId, accounts } = props;
 
 	return (
 		<Layout title="Monzo Balancer - Configure">
@@ -40,6 +41,7 @@ const AccountSelection: FC<AccountSelectionProps> = (props) => {
 			<form action="/setup/finish" method="post">
 				<input type="hidden" name="access_token" value={accessToken} />
 				<input type="hidden" name="refresh_token" value={refreshToken} />
+				<input type="hidden" name="userId" value={userId} />
 
 				<div class="form-group">
 					<label for="accountId">Select Account</label>

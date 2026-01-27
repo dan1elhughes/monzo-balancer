@@ -35,7 +35,7 @@ describe("Monzo Configuration", () => {
 		const config = await getMonzoConfig(mockEnv, accountId);
 		expect(config).toBeNull();
 		expect(mockDB.prepare).toHaveBeenCalledWith(
-			"SELECT * FROM accounts WHERE monzo_account_id = ?",
+			"SELECT * FROM monzo_accounts WHERE monzo_account_id = ?",
 		);
 		expect(mockStmt.bind).toHaveBeenCalledWith(accountId);
 	});
@@ -88,7 +88,7 @@ describe("saveTokens", () => {
 		await saveTokens(mockEnv, accountId, "new_access", "new_refresh");
 
 		expect(mockDB.prepare).toHaveBeenCalledWith(
-			"UPDATE accounts SET access_token = ?, refresh_token = ?, updated_at = ? WHERE monzo_account_id = ?",
+			"UPDATE monzo_accounts SET access_token = ?, refresh_token = ?, updated_at = ? WHERE monzo_account_id = ?",
 		);
 		expect(mockStmt.bind).toHaveBeenCalledWith(
 			"new_access",

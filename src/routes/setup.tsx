@@ -2,6 +2,7 @@ import { Context, Hono } from "hono";
 import { Env } from "../types";
 import { fetchAccountsWithData } from "../services/account-selection";
 import { registerWebhookIfNeeded } from "../services/webhook-registration";
+import { createMonzoAccountForUser } from "../services/user.service";
 import { ApprovalRequired } from "../views/approval-required";
 import { AccountSelection } from "../views/account-selection";
 import { SetupComplete } from "../views/setup-complete";
@@ -19,12 +20,19 @@ async function handleSetupContinue(
 	const formData = await c.req.formData();
 	const accessToken = formData.get("access_token") as string;
 	const refreshToken = formData.get("refresh_token") as string;
+	const userId = formData.get("userId") as string;
 
-	if (!accessToken || !refreshToken) {
-		return c.text("Missing tokens", 400);
+	if (!accessToken || !refreshToken || !userId) {
+		return c.text("Missing tokens or user ID", 400);
 	}
 
-	return renderAccountSelectionPage(c, c.env, accessToken, refreshToken);
+	return renderAccountSelectionPage(
+		c,
+		c.env,
+		accessToken,
+		refreshToken,
+		userId,
+	);
 }
 
 async function handleSetupFinish(
@@ -35,12 +43,20 @@ async function handleSetupFinish(
 
 	const accessToken = formData.get("access_token") as string;
 	const refreshToken = formData.get("refresh_token") as string;
+	const userId = formData.get("userId") as string;
 	const accountId = formData.get("accountId") as string;
 	const potId = formData.get("potId") as string;
 	const targetBalance = formData.get("targetBalance") as string;
 	const dryRun = formData.get("dryRun") === "true";
 
-	if (!accessToken || !refreshToken || !accountId || !potId || !targetBalance) {
+	if (
+		!accessToken ||
+		!refreshToken ||
+		!userId ||
+		!accountId ||
+		!potId ||
+		!targetBalance
+	) {
 		return c.text("Missing required fields", 400);
 	}
 
@@ -49,21 +65,16 @@ async function handleSetupFinish(
 		const webhookUrl = `${new URL(c.req.url).origin}/`;
 		await registerWebhookIfNeeded(accountId, webhookUrl, accessToken);
 
-		// Save to D1
-		const stmt = env.DB.prepare(
-			`INSERT OR REPLACE INTO accounts (monzo_account_id, monzo_pot_id, target_balance, access_token, refresh_token, created_at, updated_at, dry_run)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		).bind(
-			accountId,
-			potId,
-			Math.round(parseFloat(targetBalance) * 100),
-			accessToken,
-			refreshToken,
-			Date.now(),
-			Date.now(),
-			dryRun ? 1 : 0,
-		);
-		await stmt.run();
+		// Create Monzo account for user
+		const targetBalancePennies = Math.round(parseFloat(targetBalance) * 100);
+		await createMonzoAccountForUser(env, userId, {
+			monzo_account_id: accountId,
+			monzo_pot_id: potId,
+			target_balance: targetBalancePennies,
+			access_token: accessToken,
+			refresh_token: refreshToken,
+			dry_run: dryRun,
+		});
 
 		return c.html(<SetupComplete />);
 	} catch (e) {
@@ -77,6 +88,7 @@ async function renderAccountSelectionPage(
 	env: Env,
 	accessToken: string,
 	refreshToken: string,
+	userId: string,
 ): Promise<Response> {
 	try {
 		const client = createMonzoClient(env, accessToken, refreshToken);
@@ -87,6 +99,7 @@ async function renderAccountSelectionPage(
 			<AccountSelection
 				accessToken={accessToken}
 				refreshToken={refreshToken}
+				userId={userId}
 				accounts={accounts}
 			/>,
 		);

@@ -1,5 +1,5 @@
 import { MonzoAPI, castId, Id } from "@otters/monzo";
-import { Env, AccountConfig } from "../types";
+import { Env, MonzoAccount, MonzoAccountConfig } from "../types";
 import { logger } from "../logger";
 
 /**
@@ -9,11 +9,11 @@ import { logger } from "../logger";
 export async function getMonzoConfig(
 	env: Env,
 	accountId: Id<"acc">,
-): Promise<AccountConfig | null> {
+): Promise<MonzoAccount | null> {
 	const stmt = env.DB.prepare(
-		"SELECT * FROM accounts WHERE monzo_account_id = ?",
+		"SELECT * FROM monzo_accounts WHERE monzo_account_id = ?",
 	).bind(accountId);
-	const result = await stmt.first<AccountConfig>();
+	const result = await stmt.first<MonzoAccount>();
 
 	if (!result) {
 		return null;
@@ -38,7 +38,7 @@ export async function saveTokens(
 	refreshToken: string,
 ) {
 	const stmt = env.DB.prepare(
-		"UPDATE accounts SET access_token = ?, refresh_token = ?, updated_at = ? WHERE monzo_account_id = ?",
+		"UPDATE monzo_accounts SET access_token = ?, refresh_token = ?, updated_at = ? WHERE monzo_account_id = ?",
 	).bind(accessToken, refreshToken, Date.now(), accountId);
 	await stmt.run();
 }
@@ -61,12 +61,24 @@ export function createMonzoClient(
 export async function withMonzoClient<T>(
 	env: Env,
 	accountId: Id<"acc">,
-	action: (client: MonzoAPI, config: AccountConfig) => Promise<T>,
+	action: (client: MonzoAPI, config: MonzoAccountConfig) => Promise<T>,
 ): Promise<T> {
-	const config = await getMonzoConfig(env, accountId);
-	if (!config) {
+	const configData = await getMonzoConfig(env, accountId);
+	if (!configData) {
 		throw new Error(`Missing Monzo Configuration for account ${accountId}`);
 	}
+
+	// Create runtime config (excludes tokens for safety)
+	const createRuntimeConfig = (data: MonzoAccount): MonzoAccountConfig => ({
+		id: data.id,
+		user_id: data.user_id,
+		monzo_account_id: data.monzo_account_id,
+		monzo_pot_id: data.monzo_pot_id,
+		target_balance: data.target_balance,
+		dry_run: data.dry_run,
+	});
+
+	const runtimeConfig = createRuntimeConfig(configData);
 
 	const appCreds = {
 		client_id: castId(env.MONZO_CLIENT_ID, "oauth2client"),
@@ -76,14 +88,14 @@ export async function withMonzoClient<T>(
 
 	const client = new MonzoAPI(
 		{
-			access_token: config.access_token,
-			refresh_token: config.refresh_token,
+			access_token: configData.access_token,
+			refresh_token: configData.refresh_token,
 		},
 		appCreds,
 	);
 
 	try {
-		return await action(client, config);
+		return await action(client, runtimeConfig);
 	} catch (error: unknown) {
 		logger.warn(
 			"Monzo API call failed, attempting refresh",
@@ -95,7 +107,7 @@ export async function withMonzoClient<T>(
 			params.append("grant_type", "refresh_token");
 			params.append("client_id", env.MONZO_CLIENT_ID);
 			params.append("client_secret", env.MONZO_CLIENT_SECRET);
-			params.append("refresh_token", config.refresh_token);
+			params.append("refresh_token", configData.refresh_token);
 
 			const response = await fetch("https://api.monzo.com/oauth2/token", {
 				method: "POST",
@@ -126,13 +138,8 @@ export async function withMonzoClient<T>(
 			);
 
 			const refreshedClient = new MonzoAPI(newCreds, appCreds);
-			const newConfig = {
-				...config,
-				access_token: newCreds.access_token,
-				refresh_token: newCreds.refresh_token,
-			};
 
-			return await action(refreshedClient, newConfig);
+			return await action(refreshedClient, runtimeConfig);
 		} catch (refreshError: unknown) {
 			logger.error(
 				"Failed to refresh token",

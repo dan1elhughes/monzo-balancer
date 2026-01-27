@@ -6,6 +6,7 @@ import {
 	validateOAuthState,
 	exchangeCodeForTokens,
 } from "../services/oauth.service";
+import { getOrCreateUser } from "../services/user.service";
 import { fetchAccountsWithData } from "../services/account-selection";
 import { ApprovalRequired } from "../views/approval-required";
 import { AccountSelection } from "../views/account-selection";
@@ -60,7 +61,17 @@ async function handleCallback(
 			env.MONZO_REDIRECT_URI,
 		);
 
-		return renderAccountSelectionPage(c, env, access_token, refresh_token);
+		// Create or retrieve user from database
+		const client = createMonzoClient(env, access_token, refresh_token);
+		const user = await getOrCreateUser(env, client);
+
+		return renderAccountSelectionPage(
+			c,
+			env,
+			access_token,
+			refresh_token,
+			user.user_id,
+		);
 	} catch (e) {
 		logger.error("OAuth callback failed", e);
 		return c.text("OAuth callback failed", 500);
@@ -72,6 +83,7 @@ async function renderAccountSelectionPage(
 	env: Env,
 	accessToken: string,
 	refreshToken: string,
+	userId: string,
 ): Promise<Response> {
 	try {
 		const client = createMonzoClient(env, accessToken, refreshToken);
@@ -82,6 +94,7 @@ async function renderAccountSelectionPage(
 			<AccountSelection
 				accessToken={accessToken}
 				refreshToken={refreshToken}
+				userId={userId}
 				accounts={accounts}
 			/>,
 		);

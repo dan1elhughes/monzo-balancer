@@ -1,10 +1,10 @@
 import { MonzoAPI } from "@otters/monzo";
-import { AccountConfig } from "./types";
+import { MonzoAccountConfig } from "./types";
 import { logger } from "./logger";
 
 export async function balanceAccount(
 	client: MonzoAPI,
-	config: AccountConfig,
+	config: MonzoAccountConfig,
 	triggeringTransactionId: string,
 ) {
 	const { monzo_account_id, monzo_pot_id, target_balance } = config;
