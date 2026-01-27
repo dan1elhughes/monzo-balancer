@@ -9,7 +9,7 @@ import { registerWebhookIfNeeded } from "../services/webhook-registration";
 import { renderApprovalRequired } from "../views/approval-required";
 import { renderAccountSelection } from "../views/account-selection";
 import { renderSetupComplete } from "../views/setup-complete";
-import { createMonzoClient } from "../monzo";
+import { createMonzoClient } from "../services/monzo";
 import { logger } from "../logger";
 
 export function registerSetupRoutes(app: Hono<{ Bindings: Env }>): void {

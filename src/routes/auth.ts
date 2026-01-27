@@ -13,7 +13,7 @@ import {
 } from "../services/account-selection";
 import { renderApprovalRequired } from "../views/approval-required";
 import { renderAccountSelection } from "../views/account-selection";
-import { createMonzoClient } from "../monzo";
+import { createMonzoClient } from "../services/monzo";
 import { castId } from "@otters/monzo";
 import { logger } from "../logger";
 

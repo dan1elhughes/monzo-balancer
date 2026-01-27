@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getMonzoConfig, saveTokens } from "../src/monzo";
+import { getMonzoConfig, saveTokens } from "../src/services/monzo";
 import { Env } from "../src/types";
 import { castId } from "@otters/monzo";
 

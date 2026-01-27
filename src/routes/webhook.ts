@@ -1,6 +1,6 @@
 import { Context, Hono } from "hono";
 import { Env } from "../types";
-import { withMonzoClient } from "../monzo";
+import { withMonzoClient } from "../services/monzo";
 import { balanceAccount } from "../balancer";
 import { logger } from "../logger";
 import { castId } from "@otters/monzo";

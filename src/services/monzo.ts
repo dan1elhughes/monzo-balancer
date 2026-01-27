@@ -1,6 +1,6 @@
 import { MonzoAPI, castId, Id } from "@otters/monzo";
-import { Env, AccountConfig } from "./types";
-import { logger } from "./logger";
+import { Env, AccountConfig } from "../types";
+import { logger } from "../logger";
 
 /**
  * Internal: Fetch Monzo configuration from database
