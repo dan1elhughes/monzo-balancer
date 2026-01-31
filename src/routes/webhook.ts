@@ -16,7 +16,10 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 		const body = await c.req.json();
 
 		if (body.type !== "transaction.created") {
-			return c.text("Ignored event type", 200);
+			return c.json(
+				{ status: "ignored", reason: "Event type not handled" },
+				200,
+			);
 		}
 
 		logger.info(`Received ${body.type} event`, { body });
@@ -28,12 +31,15 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 
 		if (!accountId) {
 			logger.error("Missing account_id in webhook body");
-			return c.text("Bad Request: Missing account_id", 400);
+			return c.json({ status: "error", message: "Missing account_id" }, 400);
 		}
 
 		if (!transactionId) {
 			logger.error("Missing transaction_id in webhook body");
-			return c.text("Bad Request: Missing transaction_id", 400);
+			return c.json(
+				{ status: "error", message: "Missing transaction_id" },
+				400,
+			);
 		}
 
 		await withMonzoClient(
@@ -66,9 +72,9 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 			},
 		);
 
-		return c.text("OK", 200);
+		return c.json({ status: "ok" }, 200);
 	} catch (e) {
 		logger.error("Webhook handling failed", e);
-		return c.text("Internal Server Error", 500);
+		return c.json({ status: "error", message: "Internal server error" }, 500);
 	}
 }
