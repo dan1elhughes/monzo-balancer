@@ -5,12 +5,12 @@ import { logger } from "./logger";
 export async function balanceAccount(
 	client: MonzoAPI,
 	config: MonzoAccountConfig,
-	triggeringTransactionId: string,
+	triggeringTransactionId?: string,
 	transactionAmount?: number,
 ) {
 	const { monzo_account_id, monzo_pot_id, target_balance } = config;
 
-	const dedupeId = `balance-correction-${triggeringTransactionId}`;
+	const dedupeId = `balance-correction-${triggeringTransactionId ?? crypto.randomUUID()}`;
 
 	// Determine the transfer amount and direction
 	let transferAmount: number;

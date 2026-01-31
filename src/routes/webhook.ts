@@ -34,14 +34,6 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 			return c.json({ status: "error", message: "Missing account_id" }, 400);
 		}
 
-		if (!transactionId) {
-			logger.error("Missing transaction_id in webhook body");
-			return c.json(
-				{ status: "error", message: "Missing transaction_id" },
-				400,
-			);
-		}
-
 		await withMonzoClient(
 			env,
 			castId(accountId, "acc"),
@@ -56,17 +48,26 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 					return;
 				}
 
-				// Fetch the transaction from the API to get the authoritative amount
-				// This avoids race conditions from trusting webhook data
-				const transaction = await client.getTransaction(
-					castId(transactionId, "tx"),
-				);
-				const transactionAmount = transaction.amount;
+				let transactionAmount: number | undefined;
 
-				logger.info("Fetched transaction from API", {
-					transactionId,
-					amount: transactionAmount,
-				});
+				if (transactionId) {
+					// Fetch the transaction from the API to get the authoritative amount
+					// This avoids race conditions from trusting webhook data
+					const transaction = await client.getTransaction(
+						castId(transactionId, "tx"),
+					);
+					transactionAmount = transaction.amount;
+
+					logger.info("Fetched transaction from API", {
+						transactionId,
+						amount: transactionAmount,
+					});
+				} else {
+					// No transaction ID - balance based on current account balance
+					logger.info(
+						"No transaction ID provided, balancing based on current balance",
+					);
+				}
 
 				await balanceAccount(client, config, transactionId, transactionAmount);
 			},
