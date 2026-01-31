@@ -7,7 +7,7 @@
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
 		"test": "vitest",
-		"trigger": "trigger() { curl -X POST -H 'Content-Type: application/json' -d \"{\\\"type\\\": \\\"transaction.created\\\", \\\"data\\\": {\\\"account_id\\\": \\\"$1\\\", \\\"id\\\": \\\"$(uuidgen)\\\"}}\" https://monzo-balancer.dh.workers.dev; }; trigger",
+		"trigger": "trigger() { curl -X POST -H 'Content-Type: application/json' -d \"{\\\"type\\\": \\\"transaction.created\\\", \\\"data\\\": {\\\"account_id\\\": \\\"$1\\\"}}\" https://monzo-balancer.dh.workers.dev; }; trigger",
 		"format": "prettier --write ."
 	},
 	"devDependencies": {
