@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getMonzoConfig, saveTokens } from "../src/services/monzo";
-import { Env } from "../src/types";
+import { getMonzoConfig, saveTokens } from "./monzo";
+import { Env } from "../types";
 import { castId } from "@otters/monzo";
 
 describe("Monzo Configuration", () => {

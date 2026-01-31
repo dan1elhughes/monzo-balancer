@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { balanceAccount } from "../src/balancer";
-import { MonzoAccountConfig } from "../src/types";
+import { balanceAccount } from "./balancer";
+import { MonzoAccountConfig } from "./types";
 import { castId } from "@otters/monzo";
 
 describe("balanceAccount", () => {
