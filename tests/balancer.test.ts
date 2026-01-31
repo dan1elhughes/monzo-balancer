@@ -259,4 +259,150 @@ describe("balanceAccount", () => {
 			expect(mockClient.withdrawFromPot).not.toHaveBeenCalled();
 		});
 	}); // Close "without transaction amount" describe
+
+	describe("race condition prevention", () => {
+		// Helper to create a deferred promise we can resolve manually
+		// This gives us precise control over when mock API calls complete
+		function createDeferred<T>(): {
+			promise: Promise<T>;
+			resolve: (value: T) => void;
+		} {
+			let resolveFn: (value: T) => void;
+			const promise = new Promise<T>((resolve) => {
+				resolveFn = resolve;
+			});
+			return { promise, resolve: resolveFn! };
+		}
+
+		it("two simultaneous webhooks each only transfer their specific transaction amount", async () => {
+			// This test simulates the exact race condition from the bug report:
+			// Two £750 transfers arrive simultaneously. With the old balance-based
+			// approach, both would see £1500 excess and try to transfer £1500 each.
+			// With the transaction-amount approach, each only transfers £750.
+
+			const deferredA = createDeferred<void>();
+			const deferredB = createDeferred<void>();
+			const depositedAmounts: number[] = [];
+			let callIndex = 0;
+
+			// Mock depositIntoPot to capture amounts and wait on deferred promises
+			// This simulates a slow API that hasn't responded yet
+			mockClient.depositIntoPot.mockImplementation(
+				async (_potId: string, params: { amount: number }) => {
+					depositedAmounts.push(params.amount);
+					const currentCall = callIndex++;
+					// First call waits on deferredA, second on deferredB
+					await (currentCall === 0 ? deferredA.promise : deferredB.promise);
+				},
+			);
+
+			// Start both operations (they'll hang waiting for the deferred promises)
+			const promiseA = balanceAccount(mockClient as any, config, "tx_A", 75000);
+			const promiseB = balanceAccount(mockClient as any, config, "tx_B", 75000);
+
+			// At this point, both operations are "in flight" but blocked
+			// The amounts should already be captured before we resolve
+			expect(depositedAmounts).toHaveLength(2);
+			expect(depositedAmounts[0]).toBe(75000);
+			expect(depositedAmounts[1]).toBe(75000);
+
+			// Now resolve both deferred promises to let the operations complete
+			deferredA.resolve();
+			deferredB.resolve();
+
+			// Wait for both to finish
+			await Promise.all([promiseA, promiseB]);
+
+			// Verify the results
+			expect(mockClient.depositIntoPot).toHaveBeenCalledTimes(2);
+
+			// Total deposited should be exactly £1500 (75000 + 75000 in pennies)
+			// NOT £3000 which would happen if both tried to transfer the combined amount
+			const totalDeposited = depositedAmounts.reduce((a, b) => a + b, 0);
+			expect(totalDeposited).toBe(150000);
+
+			// Verify each call used the correct dedupe_id and amount
+			expect(mockClient.depositIntoPot).toHaveBeenCalledWith(
+				config.monzo_pot_id,
+				expect.objectContaining({
+					dedupe_id: "balance-correction-tx_A",
+					amount: 75000,
+				}),
+			);
+			expect(mockClient.depositIntoPot).toHaveBeenCalledWith(
+				config.monzo_pot_id,
+				expect.objectContaining({
+					dedupe_id: "balance-correction-tx_B",
+					amount: 75000,
+				}),
+			);
+		});
+
+		it("mixed incoming and outgoing transactions handle correctly in parallel", async () => {
+			// Simulate one incoming (£500) and one outgoing (£-300) simultaneously
+			const deferredPots = createDeferred<{ id: string; balance: number }[]>();
+			const deferredWithdraw = createDeferred<void>();
+			const operations: string[] = [];
+
+			mockClient.depositIntoPot.mockImplementation(
+				async (_potId: string, params: { amount: number }) => {
+					operations.push(`deposit:${params.amount}`);
+				},
+			);
+
+			// getPots returns a deferred promise so we can control when it resolves
+			mockClient.getPots.mockImplementation(async () => {
+				const pots = await deferredPots.promise;
+				return pots;
+			});
+
+			mockClient.withdrawFromPot.mockImplementation(
+				async (_potId: string, params: { amount: number }) => {
+					operations.push(`withdraw:${params.amount}`);
+					await deferredWithdraw.promise;
+				},
+			);
+
+			// Start both operations
+			const promiseIncoming = balanceAccount(
+				mockClient as any,
+				config,
+				"tx_incoming",
+				50000,
+			);
+			const promiseOutgoing = balanceAccount(
+				mockClient as any,
+				config,
+				"tx_outgoing",
+				-30000,
+			);
+
+			// Incoming completes immediately (no deps), outgoing waits on getPots
+			// Wait a tick for promises to settle
+			await new Promise((resolve) => setImmediate(resolve));
+
+			// Incoming should be done, outgoing should be waiting on getPots
+			expect(operations).toContain("deposit:50000");
+			expect(operations).toHaveLength(1);
+
+			// Resolve getPots to let outgoing proceed to withdrawal
+			deferredPots.resolve([{ id: config.monzo_pot_id, balance: 50000 }]);
+
+			// Wait a tick for withdrawal to be called
+			await new Promise((resolve) => setImmediate(resolve));
+
+			// Now withdrawal should be "in flight"
+			expect(operations).toContain("withdraw:30000");
+			expect(operations).toHaveLength(2);
+
+			// Resolve the withdrawal to complete
+			deferredWithdraw.resolve();
+
+			// Wait for both to finish
+			await Promise.all([promiseIncoming, promiseOutgoing]);
+
+			// Verify the final state
+			expect(operations).toHaveLength(2);
+		});
+	}); // Close race condition describe
 }); // Close main describe
