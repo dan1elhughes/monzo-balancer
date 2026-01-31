@@ -1,6 +1,6 @@
 import { Context, Hono } from "hono";
 import { Env } from "../types";
-import { withMonzoClient } from "../services/monzo";
+import { getClient } from "../services/monzo";
 import { balanceAccount } from "../balancer";
 import { logger } from "../logger";
 import { castId } from "@otters/monzo";
@@ -34,44 +34,37 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 			return c.json({ status: "error", message: "Missing account_id" }, 400);
 		}
 
-		await withMonzoClient(
-			env,
-			castId(accountId, "acc"),
-			async (client, config) => {
-				if (
-					description === config.monzo_pot_id ||
-					potId === config.monzo_pot_id
-				) {
-					logger.info("Ignoring transaction related to managed pot", {
-						potId: config.monzo_pot_id,
-					});
-					return;
-				}
+		const { client, config } = await getClient(env, castId(accountId, "acc"));
 
-				let transactionAmount: number | undefined;
+		if (description === config.monzo_pot_id || potId === config.monzo_pot_id) {
+			logger.info("Ignoring transaction related to managed pot", {
+				potId: config.monzo_pot_id,
+			});
+			return c.json({ status: "ignored", reason: "Pot transaction" }, 200);
+		}
 
-				if (transactionId) {
-					// Fetch the transaction from the API to get the authoritative amount
-					// This avoids race conditions from trusting webhook data
-					const transaction = await client.getTransaction(
-						castId(transactionId, "tx"),
-					);
-					transactionAmount = transaction.amount;
+		let transactionAmount: number | undefined;
 
-					logger.info("Fetched transaction from API", {
-						transactionId,
-						amount: transactionAmount,
-					});
-				} else {
-					// No transaction ID - balance based on current account balance
-					logger.info(
-						"No transaction ID provided, balancing based on current balance",
-					);
-				}
+		if (transactionId) {
+			// Fetch the transaction from the API to get the authoritative amount
+			// This avoids race conditions from trusting webhook data
+			const transaction = await client.getTransaction(
+				castId(transactionId, "tx"),
+			);
+			transactionAmount = transaction.amount;
 
-				await balanceAccount(client, config, transactionId, transactionAmount);
-			},
-		);
+			logger.info("Fetched transaction from API", {
+				transactionId,
+				amount: transactionAmount,
+			});
+		} else {
+			// No transaction ID - balance based on current account balance
+			logger.info(
+				"No transaction ID provided, balancing based on current balance",
+			);
+		}
+
+		await balanceAccount(client, config, transactionId, transactionAmount);
 
 		return c.json({ status: "ok" }, 200);
 	} catch (e) {
