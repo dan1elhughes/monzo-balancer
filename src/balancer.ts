@@ -12,29 +12,70 @@ export async function balanceAccount(
 
 	const dedupeId = `balance-correction-${triggeringTransactionId}`;
 
-	// For incoming funds (positive amount), use the transaction amount directly
+	// When we have the transaction amount from the API, use it directly
 	// to avoid race conditions when multiple transactions arrive simultaneously
-	if (transactionAmount !== undefined && transactionAmount > 0) {
-		logger.info("Depositing incoming funds to pot", {
-			amount: transactionAmount,
-			potId: monzo_pot_id,
-		});
+	if (transactionAmount !== undefined) {
+		if (transactionAmount > 0) {
+			// Incoming funds: deposit the transaction amount to pot
+			logger.info("Depositing incoming funds to pot", {
+				amount: transactionAmount,
+				potId: monzo_pot_id,
+			});
 
-		if (config.dry_run) {
-			logger.info("Dry run enabled, skipping deposit");
-			return;
+			if (config.dry_run) {
+				logger.info("Dry run enabled, skipping deposit");
+				return;
+			}
+
+			await client.depositIntoPot(monzo_pot_id, {
+				amount: transactionAmount,
+				dedupe_id: dedupeId,
+				source_account_id: monzo_account_id,
+			});
+		} else if (transactionAmount < 0) {
+			// Outgoing funds: withdraw the absolute amount from pot to cover the spend
+			const withdrawAmount = Math.abs(transactionAmount);
+
+			// We still need to check pot balance for available funds
+			const pots = await client.getPots(monzo_account_id);
+			const targetPot = pots.find((p) => p.id === monzo_pot_id);
+
+			if (!targetPot) {
+				throw new Error(`Pot ${monzo_pot_id} not found`);
+			}
+
+			const available = targetPot.balance;
+
+			logger.info("Processing outgoing funds", {
+				withdrawAmount,
+				potBalance: available,
+				potId: monzo_pot_id,
+			});
+
+			if (available === 0) {
+				logger.info("Pot is empty, no withdrawal possible");
+				return;
+			}
+
+			const actualWithdrawAmount = Math.min(withdrawAmount, available);
+
+			if (config.dry_run) {
+				logger.info("Dry run enabled, skipping withdrawal");
+				return;
+			}
+
+			await client.withdrawFromPot(monzo_pot_id, {
+				amount: actualWithdrawAmount,
+				dedupe_id: dedupeId,
+				destination_account_id: monzo_account_id,
+			});
 		}
-
-		await client.depositIntoPot(monzo_pot_id, {
-			amount: transactionAmount,
-			dedupe_id: dedupeId,
-			source_account_id: monzo_account_id,
-		});
+		// transactionAmount === 0: nothing to do
 		return;
 	}
 
-	// For outgoing funds or when no transaction amount is provided,
-	// we still need to check the balance to determine the deficit
+	// Fallback: when no transaction amount is provided (shouldn't happen in normal webhook flow),
+	// we check the balance to determine excess/deficit
 	const [balanceData, pots] = await Promise.all([
 		client.getBalance(monzo_account_id),
 		client.getPots(monzo_account_id),

@@ -57,6 +57,92 @@ describe("balanceAccount", () => {
 		});
 	});
 
+	describe("with negative transaction amount (outgoing funds)", () => {
+		it("withdraws the transaction amount from pot", async () => {
+			mockClient.getPots.mockResolvedValue([
+				{ id: config.monzo_pot_id, balance: 5000 }, // Pot has plenty
+			]);
+
+			// Spend of £50.00
+			await balanceAccount(mockClient as any, config, "tx_123", -5000);
+
+			// Should check pot balance but NOT account balance
+			expect(mockClient.getBalance).not.toHaveBeenCalled();
+			expect(mockClient.getPots).toHaveBeenCalled();
+
+			// Should withdraw the absolute transaction amount
+			expect(mockClient.withdrawFromPot).toHaveBeenCalledWith(
+				config.monzo_pot_id,
+				expect.objectContaining({
+					amount: 5000,
+					dedupe_id: "balance-correction-tx_123",
+					destination_account_id: config.monzo_account_id,
+				}),
+			);
+			expect(mockClient.depositIntoPot).not.toHaveBeenCalled();
+		});
+
+		it("withdraws partial amount when pot has insufficient funds", async () => {
+			mockClient.getPots.mockResolvedValue([
+				{ id: config.monzo_pot_id, balance: 300 }, // Pot only has £3.00
+			]);
+
+			// Spend of £50.00
+			await balanceAccount(mockClient as any, config, "tx_123", -5000);
+
+			// Should only withdraw what's available
+			expect(mockClient.withdrawFromPot).toHaveBeenCalledWith(
+				config.monzo_pot_id,
+				expect.objectContaining({
+					amount: 300,
+					destination_account_id: config.monzo_account_id,
+				}),
+			);
+		});
+
+		it("does nothing when pot is empty", async () => {
+			mockClient.getPots.mockResolvedValue([
+				{ id: config.monzo_pot_id, balance: 0 },
+			]);
+
+			await balanceAccount(mockClient as any, config, "tx_123", -5000);
+
+			expect(mockClient.withdrawFromPot).not.toHaveBeenCalled();
+			expect(mockClient.depositIntoPot).not.toHaveBeenCalled();
+		});
+
+		it("skips withdrawal when dry_run is true", async () => {
+			mockClient.getPots.mockResolvedValue([
+				{ id: config.monzo_pot_id, balance: 5000 },
+			]);
+			const dryRunConfig = { ...config, dry_run: true };
+
+			await balanceAccount(mockClient as any, dryRunConfig, "tx_123", -5000);
+
+			expect(mockClient.withdrawFromPot).not.toHaveBeenCalled();
+			expect(mockClient.getBalance).not.toHaveBeenCalled();
+		});
+
+		it("throws error if pot not found", async () => {
+			mockClient.getPots.mockResolvedValue([]); // No pots
+
+			await expect(
+				balanceAccount(mockClient as any, config, "tx_123", -5000),
+			).rejects.toThrow(/Pot .* not found/);
+		});
+	});
+
+	describe("with zero transaction amount", () => {
+		it("does nothing", async () => {
+			await balanceAccount(mockClient as any, config, "tx_123", 0);
+
+			expect(mockClient.depositIntoPot).not.toHaveBeenCalled();
+			expect(mockClient.withdrawFromPot).not.toHaveBeenCalled();
+			expect(mockClient.getBalance).not.toHaveBeenCalled();
+			expect(mockClient.getPots).not.toHaveBeenCalled();
+		});
+	});
+
 	describe("without transaction amount (fallback to balance check)", () => {
 		it("does nothing when balance equals target", async () => {
 			mockClient.getBalance.mockResolvedValue({ balance: 1000 });
