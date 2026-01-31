@@ -6,10 +6,35 @@ export async function balanceAccount(
 	client: MonzoAPI,
 	config: MonzoAccountConfig,
 	triggeringTransactionId: string,
+	transactionAmount?: number,
 ) {
 	const { monzo_account_id, monzo_pot_id, target_balance } = config;
 
-	// 1. Get Balance and Pots in parallel
+	const dedupeId = `balance-correction-${triggeringTransactionId}`;
+
+	// For incoming funds (positive amount), use the transaction amount directly
+	// to avoid race conditions when multiple transactions arrive simultaneously
+	if (transactionAmount !== undefined && transactionAmount > 0) {
+		logger.info("Depositing incoming funds to pot", {
+			amount: transactionAmount,
+			potId: monzo_pot_id,
+		});
+
+		if (config.dry_run) {
+			logger.info("Dry run enabled, skipping deposit");
+			return;
+		}
+
+		await client.depositIntoPot(monzo_pot_id, {
+			amount: transactionAmount,
+			dedupe_id: dedupeId,
+			source_account_id: monzo_account_id,
+		});
+		return;
+	}
+
+	// For outgoing funds or when no transaction amount is provided,
+	// we still need to check the balance to determine the deficit
 	const [balanceData, pots] = await Promise.all([
 		client.getBalance(monzo_account_id),
 		client.getPots(monzo_account_id),
@@ -32,8 +57,6 @@ export async function balanceAccount(
 		logger.info("Balance is exactly on target");
 		return;
 	}
-
-	const dedupeId = `balance-correction-${triggeringTransactionId}`;
 
 	if (diff > 0) {
 		// Excess funds: Deposit to Pot
