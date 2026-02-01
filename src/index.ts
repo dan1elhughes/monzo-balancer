@@ -3,6 +3,7 @@ import { Env } from "./types";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerSetupRoutes } from "./routes/setup";
 import { registerWebhookRoutes } from "./routes/webhook";
+import { registerRefreshRoutes } from "./routes/refresh";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -10,6 +11,7 @@ const app = new Hono<{ Bindings: Env }>();
 registerAuthRoutes(app);
 registerSetupRoutes(app);
 registerWebhookRoutes(app);
+registerRefreshRoutes(app);
 
 // Handle 404s
 app.notFound((c) => c.text("Not Found", 404));
