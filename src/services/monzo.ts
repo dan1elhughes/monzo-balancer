@@ -120,11 +120,15 @@ export async function getClient(
 
 			logger.info("Token refreshed successfully");
 
+			// Monzo API may not return a new refresh_token in the response.
+			// If not provided, preserve the existing refresh_token.
+			const newRefreshToken = creds.refresh_token || configData.refresh_token;
+
 			await saveTokens(
 				env,
 				configData.user_id,
 				creds.access_token,
-				creds.refresh_token,
+				newRefreshToken,
 			);
 		} catch (refreshError: unknown) {
 			logger.error(
