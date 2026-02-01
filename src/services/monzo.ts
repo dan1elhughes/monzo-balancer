@@ -128,13 +128,20 @@ export async function getClient(
 			const creds = await client.refresh();
 			client = new MonzoAPI(creds, appCreds);
 
-			logger.info("Token refreshed successfully");
+			logger.info("Token refreshed successfully", {
+				expires_in: creds.expires_in,
+				has_refresh_token: !!creds.refresh_token,
+			});
 
 			// Monzo API may not return a new refresh_token in the response.
 			// If not provided, preserve the existing refresh_token.
 			const newRefreshToken = creds.refresh_token || configData.refresh_token;
 
-			const tokenExpiresAt = Date.now() + creds.expires_in * 1000;
+			// Calculate token expiration. Monzo API returns expires_in in seconds.
+			// Default to ~30 hours (108000 seconds) if not provided.
+			const expiresInSeconds = creds.expires_in || 108000;
+			const tokenExpiresAt = Date.now() + expiresInSeconds * 1000;
+
 			await saveTokens(
 				env,
 				configData.user_id,

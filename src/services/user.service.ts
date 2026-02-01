@@ -90,6 +90,35 @@ export async function getOrCreateUser(
 }
 
 /**
+ * Get a user by their user_id with tokens.
+ * Used for token refresh operations.
+ *
+ * @param env - Environment with database access
+ * @param userId - The user_id to fetch
+ * @returns User object with tokens, or null if not found
+ */
+export async function getUserById(
+	env: Env,
+	userId: string,
+): Promise<User | null> {
+	try {
+		const user = await env.DB.prepare("SELECT * FROM users WHERE user_id = ?")
+			.bind(userId)
+			.first<User>();
+
+		if (!user) {
+			logger.warn("User not found", { user_id: userId });
+			return null;
+		}
+
+		return user;
+	} catch (error) {
+		logger.error("Failed to fetch user by id", error);
+		throw error;
+	}
+}
+
+/**
  * Fetch all Monzo accounts linked to a user.
  * Useful for future multi-account support.
  *

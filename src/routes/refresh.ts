@@ -2,39 +2,36 @@ import { Context, Hono } from "hono";
 import { Env } from "../types";
 import { castId } from "@otters/monzo";
 import { logger } from "../logger";
-import {
-	getMonzoConfig,
-	saveTokens,
-	createMonzoClient,
-} from "../services/monzo";
+import { getUserById } from "../services/user.service";
+import { createMonzoClient } from "../services/monzo";
 
 export function registerRefreshRoutes(app: Hono<{ Bindings: Env }>): void {
-	app.post("/refresh/:accountId", handleRefresh);
-	app.get("/refresh/:accountId", handleRefresh);
+	app.post("/refresh/:userId", handleRefresh);
+	app.get("/refresh/:userId", handleRefresh);
 }
 
 async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Response> {
 	const env = c.env;
-	const accountId = c.req.param("accountId");
+	const userId = c.req.param("userId");
 
-	if (!accountId) {
+	if (!userId) {
 		return c.json(
-			{ status: "error", message: "Missing accountId parameter" },
+			{ status: "error", message: "Missing userId parameter" },
 			400,
 		);
 	}
 
-	logger.info("Token refresh requested", { accountId });
+	logger.info("Token refresh requested", { userId });
 
 	try {
-		// Get current config
-		const configData = await getMonzoConfig(env, castId(accountId, "acc"));
+		// Get user with tokens directly
+		const user = await getUserById(env, userId);
 
-		if (!configData) {
+		if (!user) {
 			return c.json(
 				{
 					status: "error",
-					message: `No configuration found for account ${accountId}`,
+					message: `No user found with id ${userId}`,
 				},
 				404,
 			);
@@ -49,8 +46,8 @@ async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Response> {
 
 		const client = createMonzoClient(
 			env,
-			configData.access_token,
-			configData.refresh_token,
+			user.access_token,
+			user.refresh_token,
 		);
 
 		// Test current token
@@ -72,18 +69,24 @@ async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Response> {
 			const creds = await client.refresh();
 
 			// Preserve existing refresh_token if not returned
-			const newRefreshToken = creds.refresh_token || configData.refresh_token;
+			const newRefreshToken = creds.refresh_token || user.refresh_token;
+
+			// Calculate token expiration. Monzo API returns expires_in in seconds.
+			// Default to ~30 hours (108000 seconds) if not provided.
+			const expiresInSeconds = creds.expires_in || 108000;
+			const tokenExpiresAt = Date.now() + expiresInSeconds * 1000;
 
 			// Save new tokens
-			await saveTokens(
+			await saveUserTokens(
 				env,
-				configData.user_id,
+				userId,
 				creds.access_token,
 				newRefreshToken,
+				tokenExpiresAt,
 			);
 
 			logger.info("Token refreshed and saved successfully", {
-				userId: configData.user_id,
+				userId,
 				hasNewRefreshToken: !!creds.refresh_token,
 			});
 
@@ -91,8 +94,7 @@ async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Response> {
 				status: "success",
 				message: "Token refreshed successfully",
 				data: {
-					user_id: configData.user_id,
-					account_id: accountId,
+					user_id: userId,
 					previous_token_valid: !!whoamiResult,
 					new_access_token_preview: `${creds.access_token.slice(0, 10)}...`,
 					refresh_token_updated: !!creds.refresh_token,
@@ -132,4 +134,20 @@ async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Response> {
 			500,
 		);
 	}
+}
+
+/**
+ * Save refreshed tokens to database (user level)
+ */
+async function saveUserTokens(
+	env: Env,
+	userId: string,
+	accessToken: string,
+	refreshToken: string,
+	tokenExpiresAt: number,
+) {
+	const stmt = env.DB.prepare(
+		"UPDATE users SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = ? WHERE user_id = ?",
+	).bind(accessToken, refreshToken, tokenExpiresAt, Date.now(), userId);
+	await stmt.run();
 }
