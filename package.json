@@ -8,6 +8,7 @@
 		"start": "wrangler dev",
 		"test": "vitest",
 		"trigger": "trigger() { curl -X POST -H 'Content-Type: application/json' -d \"{\\\"type\\\": \\\"transaction.created\\\", \\\"data\\\": {\\\"account_id\\\": \\\"$1\\\"}}\" https://monzo-balancer.dh.workers.dev; }; trigger",
+		"refresh": "refresh() { curl -X POST -s https://monzo-balancer.dh.workers.dev/refresh/$1 | jq .; }; refresh",
 		"format": "prettier --write ."
 	},
 	"devDependencies": {
