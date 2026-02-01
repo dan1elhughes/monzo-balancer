@@ -52,6 +52,7 @@ describe("Monzo Configuration", () => {
 			updated_at: 1234567890,
 			access_token: "access",
 			refresh_token: "refresh",
+			token_expires_at: 1234567890,
 		};
 		mockStmt.first.mockResolvedValue(mockAccount);
 
@@ -63,6 +64,7 @@ describe("Monzo Configuration", () => {
 		expect(config?.target_balance).toBe(2000);
 		expect(config?.monzo_account_id).toBe("acc_123");
 		expect(config?.user_id).toBe("user_123");
+		expect(config?.token_expires_at).toBe(1234567890);
 	});
 });
 
@@ -92,14 +94,15 @@ describe("saveTokens", () => {
 	});
 
 	it("saves access and refresh tokens to user in DB", async () => {
-		await saveTokens(mockEnv, userId, "new_access", "new_refresh");
+		await saveTokens(mockEnv, userId, "new_access", "new_refresh", 1234567890);
 
 		expect(mockDB.prepare).toHaveBeenCalledWith(
-			"UPDATE users SET access_token = ?, refresh_token = ?, updated_at = ? WHERE user_id = ?",
+			"UPDATE users SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = ? WHERE user_id = ?",
 		);
 		expect(mockStmt.bind).toHaveBeenCalledWith(
 			"new_access",
 			"new_refresh",
+			1234567890,
 			expect.any(Number),
 			userId,
 		);

@@ -16,6 +16,7 @@ export interface User {
 	user_id: string;
 	access_token: string;
 	refresh_token: string;
+	token_expires_at: number; // Unix timestamp (ms) when access_token expires
 	created_at: number;
 	updated_at: number;
 }

@@ -10,16 +10,25 @@ export async function getMonzoConfig(
 	env: Env,
 	accountId: Id<"acc">,
 ): Promise<
-	(MonzoAccount & { access_token: string; refresh_token: string }) | null
+	| (MonzoAccount & {
+			access_token: string;
+			refresh_token: string;
+			token_expires_at: number | null;
+	  })
+	| null
 > {
 	const stmt = env.DB.prepare(
-		`SELECT ma.*, u.access_token, u.refresh_token 
+		`SELECT ma.*, u.access_token, u.refresh_token, u.token_expires_at
 		 FROM monzo_accounts ma
 		 JOIN users u ON ma.user_id = u.user_id
 		 WHERE ma.monzo_account_id = ?`,
 	).bind(accountId);
 	const result = await stmt.first<
-		MonzoAccount & { access_token: string; refresh_token: string }
+		MonzoAccount & {
+			access_token: string;
+			refresh_token: string;
+			token_expires_at: number | null;
+		}
 	>();
 
 	if (!result) {
@@ -43,10 +52,11 @@ export async function saveTokens(
 	userId: string,
 	accessToken: string,
 	refreshToken: string,
+	tokenExpiresAt: number,
 ) {
 	const stmt = env.DB.prepare(
-		"UPDATE users SET access_token = ?, refresh_token = ?, updated_at = ? WHERE user_id = ?",
-	).bind(accessToken, refreshToken, Date.now(), userId);
+		"UPDATE users SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = ? WHERE user_id = ?",
+	).bind(accessToken, refreshToken, tokenExpiresAt, Date.now(), userId);
 	await stmt.run();
 }
 
@@ -124,11 +134,13 @@ export async function getClient(
 			// If not provided, preserve the existing refresh_token.
 			const newRefreshToken = creds.refresh_token || configData.refresh_token;
 
+			const tokenExpiresAt = Date.now() + creds.expires_in * 1000;
 			await saveTokens(
 				env,
 				configData.user_id,
 				creds.access_token,
 				newRefreshToken,
+				tokenExpiresAt,
 			);
 		} catch (refreshError: unknown) {
 			logger.error(

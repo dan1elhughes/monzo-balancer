@@ -54,12 +54,13 @@ async function handleCallback(
 			return c.text("Invalid state parameter", 400);
 		}
 
-		const { access_token, refresh_token } = await exchangeCodeForTokens(
-			code,
-			env.MONZO_CLIENT_ID,
-			env.MONZO_CLIENT_SECRET,
-			env.MONZO_REDIRECT_URI,
-		);
+		const { access_token, refresh_token, token_expires_at } =
+			await exchangeCodeForTokens(
+				code,
+				env.MONZO_CLIENT_ID,
+				env.MONZO_CLIENT_SECRET,
+				env.MONZO_REDIRECT_URI,
+			);
 
 		// Create or retrieve user from database with tokens stored at user level
 		const client = createMonzoClient(env, access_token, refresh_token);
@@ -68,6 +69,7 @@ async function handleCallback(
 			client,
 			access_token,
 			refresh_token,
+			token_expires_at,
 		);
 
 		return renderAccountSelectionPage(

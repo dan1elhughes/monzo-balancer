@@ -50,7 +50,11 @@ export async function exchangeCodeForTokens(
 	clientId: string,
 	clientSecret: string,
 	redirectUri: string,
-): Promise<{ access_token: string; refresh_token: string }> {
+): Promise<{
+	access_token: string;
+	refresh_token: string;
+	token_expires_at: number;
+}> {
 	const params = new URLSearchParams();
 	params.append("grant_type", "authorization_code");
 	params.append("client_id", clientId);
@@ -73,9 +77,20 @@ export async function exchangeCodeForTokens(
 	const tokenData = (await response.json()) as {
 		access_token: string;
 		refresh_token: string;
+		expires_in: number;
 	};
+
+	// Calculate expiration timestamp from expires_in (seconds)
+	const token_expires_at = Date.now() + tokenData.expires_in * 1000;
+
+	logger.info("Token exchange successful", {
+		expires_in: tokenData.expires_in,
+		token_expires_at,
+	});
+
 	return {
 		access_token: tokenData.access_token,
 		refresh_token: tokenData.refresh_token,
+		token_expires_at,
 	};
 }

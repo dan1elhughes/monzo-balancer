@@ -19,6 +19,7 @@ export async function getOrCreateUser(
 	client: MonzoAPI,
 	accessToken: string,
 	refreshToken: string,
+	tokenExpiresAt: number,
 ): Promise<User> {
 	try {
 		// Fetch user info from Monzo API using whoami() endpoint
@@ -43,19 +44,21 @@ export async function getOrCreateUser(
 			// Update existing user with new tokens
 			const now = Date.now();
 			await env.DB.prepare(
-				"UPDATE users SET access_token = ?, refresh_token = ?, updated_at = ? WHERE user_id = ?",
+				"UPDATE users SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = ? WHERE user_id = ?",
 			)
-				.bind(accessToken, refreshToken, now, monzoUserId)
+				.bind(accessToken, refreshToken, tokenExpiresAt, now, monzoUserId)
 				.run();
 
 			logger.info("Updated existing user in database", {
 				user_id: monzoUserId,
+				token_expires_at: tokenExpiresAt,
 			});
 
 			return {
 				...existingUser,
 				access_token: accessToken,
 				refresh_token: refreshToken,
+				token_expires_at: tokenExpiresAt,
 				updated_at: now,
 			};
 		}
@@ -66,14 +69,15 @@ export async function getOrCreateUser(
 			user_id: monzoUserId,
 			access_token: accessToken,
 			refresh_token: refreshToken,
+			token_expires_at: tokenExpiresAt,
 			created_at: now,
 			updated_at: now,
 		};
 
 		await env.DB.prepare(
-			"INSERT INTO users (user_id, access_token, refresh_token, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+			"INSERT INTO users (user_id, access_token, refresh_token, token_expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 		)
-			.bind(monzoUserId, accessToken, refreshToken, now, now)
+			.bind(monzoUserId, accessToken, refreshToken, tokenExpiresAt, now, now)
 			.run();
 
 		logger.info("Created new user in database", { user_id: monzoUserId });
