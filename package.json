@@ -19,7 +19,7 @@
 		"wrangler": "^4.58.0"
 	},
 	"dependencies": {
-		"@otters/monzo": "^2.1.2",
+		"@otters/monzo": "github:dan1elhughes/libmonzo#master",
 		"hono": "^4.11.7"
 	}
 }
