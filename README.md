@@ -52,15 +52,14 @@ This allows the Balancer to access your account and move money.
 
 ### Step 2: Deploy the Worker
 
-Clone this repository and deploy it to Cloudflare:
+Clone this repository and install its dependencies:
 
 ```bash
 # Install dependencies
 npm install
-
-# Deploy to Cloudflare Workers
-npm run deploy
 ```
+
+In the Cloudflare dashboard, connect the Worker to this GitHub repository and configure `master` as the production branch. Cloudflare automatically builds and deploys the Worker whenever changes are pushed to `master`.
 
 Note your deployed Worker URL (something like `https://monzo-balancer.your-subdomain.workers.dev`)
 
@@ -87,11 +86,15 @@ npx wrangler secret put MONZO_CLIENT_SECRET
 # Paste your Client Secret when prompted
 ```
 
-Redeploy:
+Commit and push the configuration change:
 
 ```bash
-npm run deploy
+git add wrangler.toml
+git commit -m "Configure Monzo credentials"
+git push origin master
 ```
+
+Cloudflare will automatically deploy the updated Worker.
 
 ### Step 4: Set Up Your Account
 
