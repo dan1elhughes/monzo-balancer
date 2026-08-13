@@ -51,6 +51,18 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 			const transaction = await client.getTransaction(
 				castId(transactionId, "tx"),
 			);
+
+			if (transaction.decline_reason) {
+				logger.info("Ignoring declined transaction", {
+					transactionId,
+					declineReason: transaction.decline_reason,
+				});
+				return c.json(
+					{ status: "ignored", reason: "Declined transaction" },
+					200,
+				);
+			}
+
 			transactionAmount = transaction.amount;
 
 			logger.info("Fetched transaction from API", {
