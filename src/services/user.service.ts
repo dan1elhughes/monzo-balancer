@@ -150,14 +150,14 @@ export async function getUserMonzoAccounts(
 }
 
 /**
- * Create a new Monzo account configuration for a user.
- * Used during setup to link a Monzo account to a user.
+ * Create or update a Monzo account configuration for a user.
+ * Used during setup to link an account and save its latest settings.
  * Tokens are stored at the user level, not the account level.
  *
  * @param env - Environment with database access
  * @param userId - The user_id to associate this account with
  * @param monzoAccountData - The account configuration data (no tokens)
- * @returns The created MonzoAccount object
+ * @returns The saved MonzoAccount object
  */
 export async function createMonzoAccountForUser(
 	env: Env,
@@ -172,22 +172,18 @@ export async function createMonzoAccountForUser(
 	const id = crypto.randomUUID();
 	const now = Date.now();
 
-	const account: MonzoAccount = {
-		id,
-		user_id: userId,
-		monzo_account_id: monzoAccountData.monzo_account_id as any,
-		monzo_pot_id: monzoAccountData.monzo_pot_id as any,
-		target_balance: monzoAccountData.target_balance,
-		dry_run: monzoAccountData.dry_run,
-		created_at: now,
-		updated_at: now,
-	};
-
 	try {
-		await env.DB.prepare(
+		const savedAccount = await env.DB.prepare(
 			`INSERT INTO monzo_accounts 
 			 (id, user_id, monzo_account_id, monzo_pot_id, target_balance, dry_run, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT (monzo_account_id) DO UPDATE SET
+			  user_id = excluded.user_id,
+			  monzo_pot_id = excluded.monzo_pot_id,
+			  target_balance = excluded.target_balance,
+			  dry_run = excluded.dry_run,
+			  updated_at = excluded.updated_at
+			 RETURNING *`,
 		)
 			.bind(
 				id,
@@ -199,17 +195,25 @@ export async function createMonzoAccountForUser(
 				now,
 				now,
 			)
-			.run();
+			.first<Omit<MonzoAccount, "dry_run"> & { dry_run: number | boolean }>();
 
-		logger.info("Created Monzo account for user", {
+		if (!savedAccount) {
+			throw new Error("Saved Monzo account could not be read");
+		}
+		const account: MonzoAccount = {
+			...savedAccount,
+			dry_run: Boolean(savedAccount.dry_run),
+		};
+
+		logger.info("Saved Monzo account for user", {
 			user_id: userId,
-			account_id: id,
+			account_id: account.id,
 			monzo_account_id: monzoAccountData.monzo_account_id,
 		});
 
 		return account;
 	} catch (error) {
-		logger.error("Failed to create Monzo account for user", error);
+		logger.error("Failed to save Monzo account for user", error);
 		throw error;
 	}
 }
