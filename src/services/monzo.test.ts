@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getMonzoConfig, saveTokens } from "./monzo";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getClient, getMonzoConfig, saveTokens } from "./monzo";
 import { Env } from "../types";
-import { castId } from "@otters/monzo";
+import { castId, MonzoAPI } from "@otters/monzo";
+import { logger } from "../logger";
 
 describe("Monzo Configuration", () => {
 	const mockStmt = {
@@ -107,5 +108,84 @@ describe("saveTokens", () => {
 			userId,
 		);
 		expect(mockStmt.run).toHaveBeenCalled();
+	});
+});
+
+describe("getClient token validation diagnostics", () => {
+	const mockStmt = {
+		bind: vi.fn().mockReturnThis(),
+		first: vi.fn(),
+		run: vi.fn(),
+	};
+	const mockDB = { prepare: vi.fn() };
+	const mockEnv: Env = {
+		DB: mockDB as any,
+		MONZO_CLIENT_ID: "oauth2client_123",
+		MONZO_CLIENT_SECRET: "test_secret",
+		MONZO_REDIRECT_URI: "http://localhost",
+	};
+	const config = {
+		id: "uuid_123",
+		user_id: "user_123",
+		monzo_account_id: "acc_123",
+		monzo_pot_id: "pot_123",
+		target_balance: 2000,
+		dry_run: 0,
+		created_at: 1234567890,
+		updated_at: 1234567890,
+		access_token: "secret-access-token",
+		refresh_token: "secret-refresh-token",
+		token_expires_at: 1_700_000_060_000,
+	};
+
+	beforeEach(() => {
+		vi.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+		mockDB.prepare.mockReturnValue(mockStmt);
+		mockStmt.bind.mockReturnThis();
+		mockStmt.first.mockResolvedValue(config);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("logs the authenticated user and stored token expiry", async () => {
+		vi.spyOn(MonzoAPI.prototype, "whoami").mockResolvedValue({
+			authenticated: true,
+			client_id: castId("oauth2client_123", "oauth2client"),
+			user_id: castId("user_123", "user"),
+		});
+		const info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+
+		await getClient(mockEnv, castId("acc_123", "acc"));
+
+		expect(info).toHaveBeenCalledWith("Monzo token validation completed", {
+			accountId: "acc_123",
+			userId: "user_123",
+			authenticated: true,
+			authenticatedUserId: "user_123",
+			tokenExpiresAt: 1_700_000_060_000,
+			tokenExpired: false,
+			tokenExpiresInMs: 60_000,
+		});
+	});
+
+	it("records an unauthenticated result without logging secrets or refreshing", async () => {
+		vi.spyOn(MonzoAPI.prototype, "whoami").mockResolvedValue({
+			authenticated: false,
+			client_id: castId("oauth2client_123", "oauth2client"),
+			user_id: castId("user_123", "user"),
+		});
+		const refresh = vi.spyOn(MonzoAPI.prototype, "refresh");
+		const info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+
+		const result = await getClient(mockEnv, castId("acc_123", "acc"));
+
+		expect(result.client).toBeInstanceOf(MonzoAPI);
+		expect(refresh).not.toHaveBeenCalled();
+		const serializedLogs = JSON.stringify(info.mock.calls);
+		expect(serializedLogs).toContain('"authenticated":false');
+		expect(serializedLogs).not.toContain("secret-access-token");
+		expect(serializedLogs).not.toContain("secret-refresh-token");
 	});
 });

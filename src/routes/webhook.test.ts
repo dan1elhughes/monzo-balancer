@@ -1,7 +1,8 @@
 import { Hono } from "hono";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerWebhookRoutes } from "./webhook";
 import { Env } from "../types";
+import { logger } from "../logger";
 
 const { balanceAccount, getClient } = vi.hoisted(() => ({
 	balanceAccount: vi.fn(),
@@ -35,6 +36,10 @@ function createWebhookRequest(transactionId: string): Request {
 describe("webhook routes", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
 	});
 
 	it("ignores a transaction when the authoritative transaction is declined", async () => {
@@ -96,5 +101,73 @@ describe("webhook routes", () => {
 			transaction.id,
 			transaction.amount,
 		);
+	});
+
+	it("logs safe correlated diagnostics for a Monzo HTTP failure", async () => {
+		const request = new Request(
+			"https://api.monzo.com/transactions/tx_forbidden?expand=merchant",
+			{
+				method: "GET",
+				headers: { Authorization: "Bearer secret-token" },
+			},
+		);
+		const response = new Response('{"error":"invalid_token"}', {
+			status: 403,
+		});
+		const client = {
+			getTransaction: vi.fn().mockRejectedValue({ request, response }),
+		};
+		getClient.mockResolvedValue({
+			client,
+			config: { monzo_pot_id: "pot_test" },
+		});
+		const error = vi.spyOn(logger, "error").mockImplementation(() => undefined);
+
+		const routeResponse = await createApp().fetch(
+			createWebhookRequest("tx_forbidden"),
+			{} as Env,
+		);
+
+		expect(routeResponse.status).toBe(500);
+		expect(await routeResponse.json()).toEqual({
+			status: "error",
+			message: "Internal server error",
+		});
+		expect(error).toHaveBeenCalledWith("Webhook Monzo API request failed", {
+			accountId: "acc_test",
+			transactionId: "tx_forbidden",
+			status: 403,
+			method: "GET",
+			pathname: "/transactions/tx_forbidden",
+			responseBody: '{"error":"invalid_token"}',
+			responseBodyTruncated: false,
+		});
+		const serializedLogs = JSON.stringify(error.mock.calls);
+		expect(serializedLogs).not.toContain("secret-token");
+		expect(serializedLogs).not.toContain("expand=merchant");
+	});
+
+	it("uses only the existing generic log for a non-HTTP failure", async () => {
+		const failure = new Error("database unavailable");
+		const client = {
+			getTransaction: vi.fn().mockRejectedValue(failure),
+		};
+		getClient.mockResolvedValue({
+			client,
+			config: { monzo_pot_id: "pot_test" },
+		});
+		const error = vi.spyOn(logger, "error").mockImplementation(() => undefined);
+
+		const routeResponse = await createApp().fetch(
+			createWebhookRequest("tx_failed"),
+			{} as Env,
+		);
+
+		expect(routeResponse.status).toBe(500);
+		expect(error).not.toHaveBeenCalledWith(
+			"Webhook Monzo API request failed",
+			expect.anything(),
+		);
+		expect(error).toHaveBeenCalledWith("Webhook handling failed", failure);
 	});
 });

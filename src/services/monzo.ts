@@ -117,7 +117,19 @@ export async function getClient(
 
 	// Check if token is valid by calling whoami
 	try {
-		await client.whoami();
+		const whoami = await client.whoami();
+		const now = Date.now();
+		const tokenExpiresAt = configData.token_expires_at;
+
+		logger.info("Monzo token validation completed", {
+			accountId,
+			userId: configData.user_id,
+			authenticated: whoami.authenticated,
+			authenticatedUserId: whoami.user_id ?? null,
+			tokenExpiresAt,
+			tokenExpired: tokenExpiresAt === null ? null : tokenExpiresAt <= now,
+			tokenExpiresInMs: tokenExpiresAt === null ? null : tokenExpiresAt - now,
+		});
 	} catch (error: unknown) {
 		logger.warn(
 			"Token appears invalid, attempting refresh",

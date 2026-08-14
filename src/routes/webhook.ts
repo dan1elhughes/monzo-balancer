@@ -4,6 +4,7 @@ import { getClient } from "../services/monzo";
 import { balanceAccount } from "../balancer";
 import { logger } from "../logger";
 import { castId } from "@otters/monzo";
+import { getMonzoHttpDiagnostics } from "../services/monzo-http-diagnostics";
 
 export function registerWebhookRoutes(app: Hono<{ Bindings: Env }>): void {
 	app.post("/", handleWebhook);
@@ -11,6 +12,8 @@ export function registerWebhookRoutes(app: Hono<{ Bindings: Env }>): void {
 
 async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 	const env = c.env;
+	let accountId: string | undefined;
+	let transactionId: string | undefined;
 
 	try {
 		const body = await c.req.json();
@@ -24,8 +27,8 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 
 		logger.info(`Received ${body.type} event`, { body });
 
-		const accountId = body.data?.account_id;
-		const transactionId = body.data?.id;
+		accountId = body.data?.account_id;
+		transactionId = body.data?.id;
 		const description = body.data?.description;
 		const potId = body.data?.metadata?.pot_id;
 
@@ -80,6 +83,14 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 
 		return c.json({ status: "ok" }, 200);
 	} catch (e) {
+		const diagnostics = await getMonzoHttpDiagnostics(e);
+		if (diagnostics) {
+			logger.error("Webhook Monzo API request failed", {
+				accountId,
+				transactionId,
+				...diagnostics,
+			});
+		}
 		logger.error("Webhook handling failed", e);
 		return c.json({ status: "error", message: "Internal server error" }, 500);
 	}
