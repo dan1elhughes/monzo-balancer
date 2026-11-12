@@ -5,6 +5,12 @@ import { balanceAccount } from "../balancer";
 import { logger } from "../logger";
 import { castId } from "@otters/monzo";
 import { getMonzoHttpDiagnostics } from "../services/monzo-http-diagnostics";
+import { AccessCheckName, recordAccessCheck } from "../services/access-alerts";
+import {
+	describeMonzoFailure,
+	getMonzoStatus,
+	MonzoAuthenticationError,
+} from "../services/access-checks";
 
 export function registerWebhookRoutes(app: Hono<{ Bindings: Env }>): void {
 	app.post("/", handleWebhook);
@@ -14,6 +20,7 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 	const env = c.env;
 	let accountId: string | undefined;
 	let transactionId: string | undefined;
+	let check: AccessCheckName = "authentication";
 
 	try {
 		const body = await c.req.json();
@@ -38,6 +45,7 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 		}
 
 		const { client, config } = await getClient(env, castId(accountId, "acc"));
+		check = "transactions";
 
 		if (description === config.monzo_pot_id || potId === config.monzo_pot_id) {
 			logger.info("Ignoring transaction related to managed pot", {
@@ -79,11 +87,60 @@ async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
 			);
 		}
 
-		await balanceAccount(client, config, transactionId, transactionAmount);
+		check =
+			transactionAmount === undefined
+				? "pots"
+				: transactionAmount > 0
+					? "deposits"
+					: "withdrawals";
+		const result = await balanceAccount(
+			client,
+			config,
+			transactionId,
+			transactionAmount,
+		);
+		if (result) {
+			await recordAccessCheck(env, {
+				accountId,
+				check: result,
+				status: "healthy",
+				detail: "A live balancing transfer succeeded.",
+			});
+			if (result === "withdrawals" || transactionAmount === undefined) {
+				await recordAccessCheck(env, {
+					accountId,
+					check: "pots",
+					status: "healthy",
+					detail: "Pot listing succeeded during live balancing.",
+				});
+			}
+		}
 
 		return c.json({ status: "ok" }, 200);
 	} catch (e) {
 		const diagnostics = await getMonzoHttpDiagnostics(e);
+		if (diagnostics?.pathname === "/pots") check = "pots";
+		else if (/^\/pots\/[^/]+\/deposit$/.test(diagnostics?.pathname ?? ""))
+			check = "deposits";
+		else if (/^\/pots\/[^/]+\/withdraw$/.test(diagnostics?.pathname ?? ""))
+			check = "withdrawals";
+		const status = getMonzoStatus(e);
+		if (
+			accountId &&
+			(status === 401 ||
+				status === 403 ||
+				e instanceof MonzoAuthenticationError)
+		) {
+			await recordAccessCheck(env, {
+				accountId,
+				check:
+					status === 401 || e instanceof MonzoAuthenticationError
+						? "authentication"
+						: check,
+				status: "unhealthy",
+				detail: describeMonzoFailure(`Webhook ${check}`, e),
+			});
+		}
 		if (diagnostics) {
 			logger.error("Webhook Monzo API request failed", {
 				accountId,

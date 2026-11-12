@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerWebhookRoutes } from "./webhook";
 import { Env } from "../types";
 import { logger } from "../logger";
+import { recordAccessCheck } from "../services/access-alerts";
+
+vi.mock("../services/access-alerts", () => ({ recordAccessCheck: vi.fn() }));
 
 const { balanceAccount, getClient } = vi.hoisted(() => ({
 	balanceAccount: vi.fn(),
@@ -142,9 +145,72 @@ describe("webhook routes", () => {
 			responseBody: '{"error":"invalid_token"}',
 			responseBodyTruncated: false,
 		});
+		expect(recordAccessCheck).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				accountId: "acc_test",
+				check: "transactions",
+				status: "unhealthy",
+			}),
+		);
 		const serializedLogs = JSON.stringify(error.mock.calls);
 		expect(serializedLogs).not.toContain("secret-token");
 		expect(serializedLogs).not.toContain("expand=merchant");
+	});
+
+	it("records pot permission failures separately from transaction access", async () => {
+		getClient.mockResolvedValue({
+			client: { getTransaction: vi.fn().mockResolvedValue({ amount: -100 }) },
+			config: { monzo_pot_id: "pot_test" },
+		});
+		balanceAccount.mockRejectedValueOnce({ response: { status: 403 } });
+		const response = await createApp().fetch(
+			createWebhookRequest("tx_test"),
+			{} as Env,
+		);
+		expect(response.status).toBe(500);
+		expect(recordAccessCheck).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ check: "withdrawals", status: "unhealthy" }),
+		);
+	});
+
+	it("clears a transfer incident only after an actual successful transfer", async () => {
+		getClient.mockResolvedValue({
+			client: { getTransaction: vi.fn().mockResolvedValue({ amount: -100 }) },
+			config: { monzo_pot_id: "pot_test" },
+		});
+		balanceAccount.mockResolvedValueOnce("withdrawals");
+		const response = await createApp().fetch(
+			createWebhookRequest("tx_test"),
+			{} as Env,
+		);
+		expect(response.status).toBe(200);
+		expect(recordAccessCheck).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ check: "withdrawals", status: "healthy" }),
+		);
+	});
+
+	it("does not clear withdrawal failures when a deposit succeeds", async () => {
+		getClient.mockResolvedValue({
+			client: { getTransaction: vi.fn().mockResolvedValue({ amount: 100 }) },
+			config: { monzo_pot_id: "pot_test" },
+		});
+		balanceAccount.mockResolvedValueOnce("deposits");
+		const response = await createApp().fetch(
+			createWebhookRequest("tx_deposit"),
+			{} as Env,
+		);
+		expect(response.status).toBe(200);
+		expect(recordAccessCheck).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ check: "deposits", status: "healthy" }),
+		);
+		expect(recordAccessCheck).not.toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ check: "withdrawals", status: "healthy" }),
+		);
 	});
 
 	it("uses only the existing generic log for a non-HTTP failure", async () => {

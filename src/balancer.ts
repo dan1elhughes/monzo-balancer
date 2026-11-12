@@ -129,4 +129,5 @@ export async function balanceAccount(
 			destination_account_id: monzo_account_id,
 		});
 	}
+	return isDeposit ? ("deposits" as const) : ("withdrawals" as const);
 }

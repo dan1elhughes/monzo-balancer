@@ -1,6 +1,12 @@
 import { MonzoAPI, castId, Id } from "@otters/monzo";
 import { Env, MonzoAccount, MonzoAccountConfig } from "../types";
 import { logger } from "../logger";
+import { recordAccessCheck } from "./access-alerts";
+import {
+	describeMonzoFailure,
+	MonzoAuthenticationError,
+} from "./access-checks";
+import { refreshMonzoUser } from "./token-refresh";
 
 /**
  * Internal: Fetch Monzo configuration from database
@@ -101,18 +107,10 @@ export async function getClient(
 
 	const runtimeConfig = createRuntimeConfig(configData);
 
-	const appCreds = {
-		client_id: castId(env.MONZO_CLIENT_ID, "oauth2client"),
-		client_secret: env.MONZO_CLIENT_SECRET,
-		redirect_uri: "http://localhost", // Placeholder
-	};
-
-	let client = new MonzoAPI(
-		{
-			access_token: configData.access_token,
-			refresh_token: configData.refresh_token,
-		},
-		appCreds,
+	let client = createMonzoClient(
+		env,
+		configData.access_token,
+		configData.refresh_token,
 	);
 
 	// Check if token is valid by calling whoami
@@ -130,64 +128,35 @@ export async function getClient(
 			tokenExpired: tokenExpiresAt === null ? null : tokenExpiresAt <= now,
 			tokenExpiresInMs: tokenExpiresAt === null ? null : tokenExpiresAt - now,
 		});
+		if (!whoami.authenticated || whoami.user_id !== configData.user_id) {
+			throw new MonzoAuthenticationError();
+		}
 	} catch (error: unknown) {
-		logger.warn(
-			"Token appears invalid, attempting refresh",
-			error as Record<string, unknown>,
-		);
-
+		logger.warn("Token validation failed, attempting refresh", { accountId });
 		try {
-			const creds = await client.refresh();
-			client = new MonzoAPI(creds, appCreds);
-
-			logger.info("Token refreshed successfully", {
-				expires_in: creds.expires_in,
-				has_refresh_token: !!creds.refresh_token,
-			});
-
-			// Monzo API may not return a new refresh_token in the response.
-			// If not provided, preserve the existing refresh_token.
-			const newRefreshToken = creds.refresh_token || configData.refresh_token;
-
-			// Calculate token expiration. Monzo API returns expires_in in seconds.
-			// Default to ~30 hours (108000 seconds) if not provided.
-			const expiresInSeconds = creds.expires_in || 108000;
-			const tokenExpiresAt = Date.now() + expiresInSeconds * 1000;
-
-			await saveTokens(
-				env,
-				configData.user_id,
-				creds.access_token,
-				newRefreshToken,
-				tokenExpiresAt,
-			);
+			client = await refreshMonzoUser(env, configData);
+			const identity = await client.whoami();
+			if (!identity.authenticated || identity.user_id !== configData.user_id)
+				throw new MonzoAuthenticationError();
 		} catch (refreshError: unknown) {
-			logger.error(
-				"Failed to refresh token",
-				refreshError as Record<string, unknown>,
-			);
-			if (
-				typeof refreshError === "object" &&
-				refreshError !== null &&
-				"response" in refreshError
-			) {
-				try {
-					const response = (refreshError as { response: Response }).response;
-					const body = await response.clone().text();
-					logger.error("Refresh error response", {
-						status: response.status,
-						body,
-					});
-				} catch (e) {
-					logger.error(
-						"Failed to read refresh error response body",
-						e as Record<string, unknown>,
-					);
-				}
-			}
+			await recordAccessCheck(env, {
+				accountId,
+				check: "authentication",
+				status: "unhealthy",
+				detail: describeMonzoFailure(
+					"Authentication after refresh",
+					refreshError,
+				),
+			});
 			throw refreshError;
 		}
 	}
+	await recordAccessCheck(env, {
+		accountId,
+		check: "authentication",
+		status: "healthy",
+		detail: "Authentication verified for the configured user.",
+	});
 
 	return { client, config: runtimeConfig };
 }

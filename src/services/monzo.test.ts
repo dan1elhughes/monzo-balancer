@@ -3,6 +3,11 @@ import { getClient, getMonzoConfig, saveTokens } from "./monzo";
 import { Env } from "../types";
 import { castId, MonzoAPI } from "@otters/monzo";
 import { logger } from "../logger";
+import { refreshMonzoUser } from "./token-refresh";
+import { recordAccessCheck } from "./access-alerts";
+
+vi.mock("./token-refresh", () => ({ refreshMonzoUser: vi.fn() }));
+vi.mock("./access-alerts", () => ({ recordAccessCheck: vi.fn() }));
 
 describe("Monzo Configuration", () => {
 	const mockStmt = {
@@ -170,19 +175,39 @@ describe("getClient token validation diagnostics", () => {
 		});
 	});
 
-	it("records an unauthenticated result without logging secrets or refreshing", async () => {
+	it("attempts refresh for an unauthenticated result and rejects it if authentication is still false", async () => {
 		vi.spyOn(MonzoAPI.prototype, "whoami").mockResolvedValue({
 			authenticated: false,
 			client_id: castId("oauth2client_123", "oauth2client"),
 			user_id: castId("user_123", "user"),
 		});
-		const refresh = vi.spyOn(MonzoAPI.prototype, "refresh");
+		vi.mocked(refreshMonzoUser).mockResolvedValue(
+			new MonzoAPI(
+				{ access_token: "new", refresh_token: "refresh" },
+				{
+					client_id: "oauth2client_123",
+					client_secret: "secret",
+					redirect_uri: "http://localhost",
+				},
+			),
+		);
 		const info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
 
-		const result = await getClient(mockEnv, castId("acc_123", "acc"));
-
-		expect(result.client).toBeInstanceOf(MonzoAPI);
-		expect(refresh).not.toHaveBeenCalled();
+		await expect(getClient(mockEnv, castId("acc_123", "acc"))).rejects.toThrow(
+			"authentication",
+		);
+		expect(refreshMonzoUser).toHaveBeenCalledWith(
+			mockEnv,
+			expect.objectContaining({ user_id: "user_123" }),
+		);
+		expect(recordAccessCheck).toHaveBeenCalledWith(
+			mockEnv,
+			expect.objectContaining({
+				accountId: "acc_123",
+				check: "authentication",
+				status: "unhealthy",
+			}),
+		);
 		const serializedLogs = JSON.stringify(info.mock.calls);
 		expect(serializedLogs).toContain('"authenticated":false');
 		expect(serializedLogs).not.toContain("secret-access-token");

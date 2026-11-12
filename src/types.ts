@@ -5,6 +5,9 @@ export interface Env {
 	MONZO_CLIENT_ID: string;
 	MONZO_CLIENT_SECRET: string;
 	MONZO_REDIRECT_URI: string;
+	ALERT_EMAIL?: SendEmail;
+	ALERT_FROM?: string;
+	ALERT_TO?: string;
 }
 
 /**

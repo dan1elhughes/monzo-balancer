@@ -16,6 +16,12 @@ crons = ["0 * * * *"]
 [observability.logs]
 enabled = true
 
+[[send_email]]
+name = "ALERT_EMAIL"
+destination_address = "cloudflare@danhughes.dev"
+
 [vars]
 MONZO_CLIENT_ID = "oauth2client_0000B253u1ZmFYn2GzFWLK"
 MONZO_REDIRECT_URI = "https://monzo-balancer.dh.workers.dev/oauth/callback"
+ALERT_FROM = "monzo-balancer@danhughes.dev"
+ALERT_TO = "cloudflare@danhughes.dev"

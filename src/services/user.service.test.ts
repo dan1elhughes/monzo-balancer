@@ -1,5 +1,4 @@
-// @ts-expect-error The installed Node types predate node:sqlite; Node 26 provides it at runtime.
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Env } from "../types";
 import { createMonzoAccountForUser } from "./user.service";
@@ -12,10 +11,10 @@ class SqliteD1Database {
 	prepare(sql: string) {
 		this.prepareCalls += 1;
 		const statement = this.database.prepare(sql);
-		let values: unknown[] = [];
+		let values: SQLInputValue[] = [];
 
 		return {
-			bind(...boundValues: unknown[]) {
+			bind(...boundValues: SQLInputValue[]) {
 				values = boundValues;
 				return this;
 			},
